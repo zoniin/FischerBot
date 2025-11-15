@@ -4,7 +4,6 @@ Uses alpha-beta search with Fischer-style evaluation.
 """
 
 import chess
-import chess.polyglot
 import random
 from typing import Tuple, Optional
 from evaluation import evaluate_position
@@ -129,7 +128,7 @@ class FischerBot:
         self.nodes_searched += 1
 
         # Check transposition table
-        board_hash = chess.polyglot.zobrist_hash(board)
+        board_hash = hash(board.fen())
         if board_hash in self.transposition_table:
             cached_depth, cached_score = self.transposition_table[board_hash]
             if cached_depth >= depth:
