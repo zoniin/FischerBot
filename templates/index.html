@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fischer Bot - Chess Engine</title>
+    <title>FischerBot - Chess Engine Inspired by Bobby Fischer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♔</text></svg>">
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>♔ Fischer Bot ♚</h1>
-            <p class="tagline">Play against a chess engine inspired by Bobby Fischer</p>
+            <h1>♔ FischerBot ♚</h1>
+            <p class="tagline">A chess engine inspired by the legendary Bobby Fischer</p>
         </header>
 
         <div class="game-container">
@@ -20,11 +21,11 @@
                     <h2>Game Controls</h2>
 
                     <div class="difficulty-selector">
-                        <label>Difficulty:</label>
+                        <label>Difficulty Level:</label>
                         <select id="difficulty">
-                            <option value="easy">Easy (Depth 2)</option>
-                            <option value="medium" selected>Medium (Depth 4)</option>
-                            <option value="hard">Hard (Depth 6)</option>
+                            <option value="easy">Easy - Beginner</option>
+                            <option value="medium" selected>Medium - Intermediate</option>
+                            <option value="hard">Hard - Advanced</option>
                         </select>
                     </div>
 
@@ -54,13 +55,13 @@
 
             <div class="right-panel">
                 <div class="about">
-                    <h2>About Fischer Bot</h2>
-                    <p>This chess engine is inspired by the legendary Bobby Fischer's playing style:</p>
+                    <h2>About FischerBot</h2>
+                    <p>FischerBot is a chess engine inspired by Bobby Fischer's legendary playing style. Experience the aggressive and tactical gameplay that made Fischer a chess icon.</p>
                     <ul>
                         <li>⚔️ Aggressive, tactical play</li>
                         <li>📚 Strong opening preparation</li>
                         <li>👑 Excellent endgame technique</li>
-                        <li>⚡ Preference for active piece play</li>
+                        <li>⚡ Active piece play</li>
                     </ul>
                 </div>
 

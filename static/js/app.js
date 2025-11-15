@@ -19,7 +19,7 @@ function initBoard() {
         onDragStart: onDragStart,
         onDrop: onDrop,
         onSnapEnd: onSnapEnd,
-        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+        pieceTheme: '/static/img/pieces/{piece}.svg'
     };
     board = Chessboard('board', config);
 }
