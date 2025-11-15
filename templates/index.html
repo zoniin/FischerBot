@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fischer Bot - Play Chess</title>
+
+    <!-- Chess libraries -->
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .game-container {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        #board {
+            width: 500px;
+            margin: 0 auto;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .card h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.2em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        select, button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 1em;
+        }
+
+        select {
+            background: white;
+            cursor: pointer;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .status {
+            padding: 15px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            color: #1976d2;
+        }
+
+        .status.check {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .status.game-over {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .move-history {
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 5px;
+            padding: 10px;
+        }
+
+        .move-item {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            font-family: monospace;
+        }
+
+        .thinking {
+            text-align: center;
+            padding: 10px;
+            background: #fff3e0;
+            border-radius: 5px;
+            font-style: italic;
+            color: #f57c00;
+            display: none;
+        }
+
+        @media (max-width: 900px) {
+            .game-container {
+                grid-template-columns: 1fr;
+            }
+
+            #board {
+                width: 100%;
+                max-width: 500px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fischer Bot</h1>
+        <p class="subtitle">Play chess against Bobby Fischer's style</p>
+
+        <div class="game-container">
+            <div>
+                <div id="board"></div>
+                <div class="thinking" id="thinking">Fischer Bot is thinking...</div>
+            </div>
+
+            <div class="controls">
+                <div class="card">
+                    <h3>New Game</h3>
+                    <div class="form-group">
+                        <label>Play as:</label>
+                        <select id="colorSelect">
+                            <option value="white">White</option>
+                            <option value="black">Black</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Difficulty:</label>
+                        <select id="difficultySelect">
+                            <option value="2">Easy (Depth 2)</option>
+                            <option value="3">Medium (Depth 3)</option>
+                            <option value="4" selected>Hard (Depth 4)</option>
+                            <option value="5">Expert (Depth 5)</option>
+                        </select>
+                    </div>
+                    <button onclick="newGame()">Start New Game</button>
+                </div>
+
+                <div class="card">
+                    <h3>Game Status</h3>
+                    <div class="status" id="status">Click "Start New Game" to begin</div>
+                </div>
+
+                <div class="card">
+                    <h3>Move History</h3>
+                    <div class="move-history" id="moveHistory">
+                        <div style="text-align: center; color: #999;">No moves yet</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/game.js"></script>
+</body>
+</html>
