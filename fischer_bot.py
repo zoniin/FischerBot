@@ -4,6 +4,7 @@ Uses alpha-beta search with Fischer-style evaluation.
 """
 
 import chess
+import chess.polyglot
 import random
 from typing import Tuple, Optional
 from evaluation import evaluate_position

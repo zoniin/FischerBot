@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fischer Bot - Chess Engine</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <h1>♔ Fischer Bot</h1>
+                <p class="tagline">Play like a legend</p>
+            </div>
+            <div class="controls">
+                <button id="newGameBtn" class="btn btn-primary">New Game</button>
+                <button id="flipBoardBtn" class="btn btn-secondary">Flip Board</button>
+            </div>
+        </header>
+
+        <!-- Main game area -->
+        <div class="game-container">
+            <!-- Left sidebar - Moves history -->
+            <div class="sidebar sidebar-left">
+                <div class="panel">
+                    <h3>Move History</h3>
+                    <div id="moveList" class="move-list"></div>
+                </div>
+
+                <div class="panel">
+                    <h3>Game Settings</h3>
+                    <div class="setting-item">
+                        <label for="colorSelect">Play as:</label>
+                        <select id="colorSelect" class="select">
+                            <option value="white">White</option>
+                            <option value="black">Black</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label for="depthSelect">Bot Strength:</label>
+                        <select id="depthSelect" class="select">
+                            <option value="2">Easy (Depth 2)</option>
+                            <option value="3">Medium (Depth 3)</option>
+                            <option value="4" selected>Hard (Depth 4)</option>
+                            <option value="5">Expert (Depth 5)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chess board -->
+            <div class="board-container">
+                <div class="board-wrapper">
+                    <div id="chessBoard" class="chess-board"></div>
+                </div>
+
+                <!-- Status bar -->
+                <div class="status-bar">
+                    <div id="statusMessage" class="status-message">White to move</div>
+                    <div id="evaluation" class="evaluation">Eval: 0.0</div>
+                </div>
+            </div>
+
+            <!-- Right sidebar - Analysis -->
+            <div class="sidebar sidebar-right">
+                <div class="panel">
+                    <h3>Position Analysis</h3>
+                    <div id="analysisPanel" class="analysis-panel">
+                        <div class="analysis-item">
+                            <span class="label">Material:</span>
+                            <span id="materialBalance" class="value">Even</span>
+                        </div>
+                        <div class="analysis-item">
+                            <span class="label">Nodes searched:</span>
+                            <span id="nodesSearched" class="value">0</span>
+                        </div>
+                        <div class="analysis-item">
+                            <span class="label">Last move:</span>
+                            <span id="lastMove" class="value">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Captured Pieces</h3>
+                    <div class="captured-pieces">
+                        <div class="captured-white">
+                            <span class="captured-label">White:</span>
+                            <div id="capturedWhite" class="captured-container"></div>
+                        </div>
+                        <div class="captured-black">
+                            <span class="captured-label">Black:</span>
+                            <div id="capturedBlack" class="captured-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game over modal -->
+        <div id="gameOverModal" class="modal hidden">
+            <div class="modal-content">
+                <h2 id="gameOverTitle">Game Over</h2>
+                <p id="gameOverMessage"></p>
+                <button id="newGameFromModal" class="btn btn-primary">New Game</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/chess.js"></script>
+</body>
+</html>
