@@ -5,7 +5,7 @@ Provides a chess.com-inspired web interface to play against the bot.
 
 from flask import Flask, render_template, jsonify, request
 import chess
-from fischer_bot import FischerBot
+from stockfish_bot import StockfishBot
 
 app = Flask(__name__,
            template_folder='web/templates',
@@ -15,7 +15,7 @@ app = Flask(__name__,
 # Game state
 game_state = {
     'board': chess.Board(),
-    'bot': FischerBot(max_depth=4, use_opening_book=True),
+    'bot': StockfishBot(max_depth=15, skill_level=20),
     'player_color': chess.WHITE,
     'move_history': []
 }
@@ -36,7 +36,7 @@ def new_game():
     game_state['board'] = chess.Board()
     game_state['player_color'] = chess.WHITE if player_color == 'white' else chess.BLACK
     game_state['move_history'] = []
-    game_state['bot'] = FischerBot(max_depth=4, use_opening_book=True)
+    game_state['bot'] = StockfishBot(max_depth=15, skill_level=20)
 
     return jsonify({
         'success': True,

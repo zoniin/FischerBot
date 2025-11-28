@@ -44,3 +44,7 @@ htmlcov/
 
 # Chess games
 *.pgn
+
+# Stockfish engine (large binary files)
+stockfish/
+stockfish.zip
