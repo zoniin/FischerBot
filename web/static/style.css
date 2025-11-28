@@ -382,6 +382,38 @@ body {
     cursor: grabbing;
 }
 
+/* White pieces - default styling (light color) */
+.piece[data-piece="P"],
+.piece[data-piece="N"],
+.piece[data-piece="B"],
+.piece[data-piece="R"],
+.piece[data-piece="Q"],
+.piece[data-piece="K"] {
+    color: #ffffff;
+    text-shadow:
+        -1px -1px 0 #000,
+        1px -1px 0 #000,
+        -1px 1px 0 #000,
+        1px 1px 0 #000,
+        0 2px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* Black pieces - dark styling */
+.piece[data-piece="p"],
+.piece[data-piece="n"],
+.piece[data-piece="b"],
+.piece[data-piece="r"],
+.piece[data-piece="q"],
+.piece[data-piece="k"] {
+    color: #1a1715;
+    text-shadow:
+        -1px -1px 0 #666,
+        1px -1px 0 #666,
+        -1px 1px 0 #666,
+        1px 1px 0 #666,
+        0 2px 3px rgba(0, 0, 0, 0.5);
+}
+
 /* Coordinate labels */
 .square.file-label::before,
 .square.rank-label::before {
