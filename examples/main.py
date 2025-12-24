@@ -6,7 +6,7 @@ Allows you to play against the bot or watch it play against itself.
 
 import chess
 import chess.svg
-from fischer_bot import FischerBot
+from src.fischer_bot import FischerBot
 
 
 def print_board(board: chess.Board):
