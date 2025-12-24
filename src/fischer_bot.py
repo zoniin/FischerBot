@@ -6,8 +6,8 @@ Uses alpha-beta search with Fischer-style evaluation.
 import chess
 import random
 from typing import Tuple, Optional
-from evaluation import evaluate_position
-from openings import get_opening_move, get_principled_opening_move, is_in_opening_book
+from .evaluation import evaluate_position
+from .openings import get_opening_move, get_principled_opening_move, is_in_opening_book
 
 
 class FischerBot:

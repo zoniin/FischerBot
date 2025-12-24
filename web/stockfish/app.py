@@ -5,11 +5,11 @@ Provides a chess.com-inspired web interface to play against the bot.
 
 from flask import Flask, render_template, jsonify, request
 import chess
-from stockfish_bot import StockfishBot
+from src.stockfish_bot import StockfishBot
 
 app = Flask(__name__,
-           template_folder='web/templates',
-           static_folder='web/static',
+           template_folder='templates',
+           static_folder='static',
            static_url_path='/static')
 
 # Game state
@@ -248,7 +248,7 @@ def piece_to_char(piece):
 
 def evaluate_board(board):
     """Get board evaluation."""
-    from evaluation import evaluate_position
+    from src.evaluation import evaluate_position
     return evaluate_position(board) / 100.0  # Convert centipawns to pawns
 
 

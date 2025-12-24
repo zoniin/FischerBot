@@ -4,7 +4,7 @@ Example usage of Fischer Bot as a library.
 """
 
 import chess
-from fischer_bot import FischerBot
+from src.fischer_bot import FischerBot
 
 
 def example_game():

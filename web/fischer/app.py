@@ -6,7 +6,7 @@ Allows users to play chess against the bot through a web interface.
 from flask import Flask, render_template, request, jsonify, session
 import chess
 import chess.svg
-from fischer_bot import FischerBot
+from src.fischer_bot import FischerBot
 import secrets
 
 app = Flask(__name__)
