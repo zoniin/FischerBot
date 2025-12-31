@@ -3,6 +3,13 @@ Flask web server for Fischer Bot.
 Provides a chess.com-inspired web interface to play against the bot.
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from flask import Flask, render_template, jsonify, request
 import chess
 from src.stockfish_bot import StockfishBot

@@ -3,6 +3,13 @@ Flask web application for Fischer Bot.
 Allows users to play chess against the bot through a web interface.
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from flask import Flask, render_template, request, jsonify, session
 import chess
 import chess.svg
