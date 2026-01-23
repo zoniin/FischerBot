@@ -35,9 +35,10 @@ except ImportError as e:
     print(f"Info: ML bot not available: {e}")
     ML_BOT_AVAILABLE = False
 
-# Create Flask app with templates
+# Create Flask app with templates and static files
 template_dir = str(Path(__file__).parent / "templates")
-app = Flask(__name__, template_folder=template_dir)
+static_dir = str(Path(__file__).parent / "static")
+app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
 # Store game sessions (in-memory, use Redis for production)
@@ -46,19 +47,25 @@ games = {}
 
 @app.route('/')
 def index():
-    """API information endpoint."""
-    return jsonify({
-        'name': 'Fischer Bot API',
-        'version': '2.0',
-        'description': 'Chess engine inspired by Bobby Fischer',
-        'ml_available': ML_BOT_AVAILABLE,
-        'endpoints': {
-            'POST /api/new_game': 'Start a new game',
-            'POST /api/move': 'Make a move',
-            'GET /api/game_state/<game_id>': 'Get game state',
-            'GET /api/health': 'Health check'
-        }
-    })
+    """Serve the chess interface."""
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        # Fallback to JSON if template fails
+        print(f"Template rendering failed: {e}")
+        return jsonify({
+            'name': 'Fischer Bot API',
+            'version': '2.0',
+            'description': 'Chess engine inspired by Bobby Fischer',
+            'ml_available': ML_BOT_AVAILABLE,
+            'endpoints': {
+                'POST /api/new_game': 'Start a new game',
+                'POST /api/move': 'Make a move',
+                'GET /api/game_state/<game_id>': 'Get game state',
+                'GET /api/health': 'Health check'
+            },
+            'template_error': str(e)
+        })
 
 
 @app.route('/api/health', methods=['GET'])
