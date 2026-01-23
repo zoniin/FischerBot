@@ -1,96 +1,162 @@
 """
 Vercel serverless function for Fischer Bot.
-This adapts the Flask app for Vercel's serverless environment.
+Simplified API-only version for Vercel compatibility.
 """
 
 import sys
+import os
 from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from flask import Flask, render_template, request, jsonify
-import chess
-from src.fischer_bot_ml import FischerBotML
-from src.fischer_bot import FischerBot
+from flask import Flask, request, jsonify, render_template
 import secrets
-import os
 
-# Create Flask app
-app = Flask(__name__,
-            template_folder=str(Path(__file__).parent.parent / 'web' / 'fischer' / 'templates'),
-            static_folder=str(Path(__file__).parent.parent / 'web' / 'fischer' / 'static'))
+# Import chess library
+try:
+    import chess
+except ImportError:
+    raise ImportError("chess library not installed")
 
+# Import bot modules
+try:
+    from src.fischer_bot import FischerBot
+    BOT_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Could not import FischerBot: {e}")
+    BOT_AVAILABLE = False
+
+# Try to import ML bot (optional)
+try:
+    from src.fischer_bot_ml import FischerBotML
+    ML_BOT_AVAILABLE = True
+except ImportError as e:
+    print(f"Info: ML bot not available: {e}")
+    ML_BOT_AVAILABLE = False
+
+# Create Flask app with templates
+template_dir = str(Path(__file__).parent / "templates")
+app = Flask(__name__, template_folder=template_dir)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
-# Store game sessions (in production, use Redis or similar)
+# Store game sessions (in-memory, use Redis for production)
 games = {}
 
 
 @app.route('/')
 def index():
-    """Serve the main chess interface."""
-    return render_template('index.html')
+    """API information endpoint."""
+    return jsonify({
+        'name': 'Fischer Bot API',
+        'version': '2.0',
+        'description': 'Chess engine inspired by Bobby Fischer',
+        'ml_available': ML_BOT_AVAILABLE,
+        'endpoints': {
+            'POST /api/new_game': 'Start a new game',
+            'POST /api/move': 'Make a move',
+            'GET /api/game_state/<game_id>': 'Get game state',
+            'GET /api/health': 'Health check'
+        }
+    })
+
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    """Health check endpoint."""
+    return jsonify({
+        'status': 'healthy',
+        'bot_available': BOT_AVAILABLE,
+        'ml_available': ML_BOT_AVAILABLE
+    })
 
 
 @app.route('/api/new_game', methods=['POST'])
 def new_game():
     """Start a new game."""
-    data = request.json
-    difficulty = data.get('difficulty', 'medium')
-    use_ml = data.get('use_ml', True)
+    if not BOT_AVAILABLE:
+        return jsonify({'error': 'Chess bot not available'}), 500
 
-    # Map difficulty to search depth
-    depth_map = {
-        'easy': 2,
-        'medium': 4,
-        'hard': 6
-    }
-    depth = depth_map.get(difficulty, 4)
-
-    # Create new game with ML-enhanced bot
-    game_id = secrets.token_hex(8)
-    board = chess.Board()
-
-    # Use ML bot if available, otherwise fallback to regular bot
     try:
-        bot = FischerBotML(max_depth=depth, use_opening_book=True, use_ml=use_ml)
+        data = request.get_json() or {}
+        difficulty = data.get('difficulty', 'medium')
+        use_ml = data.get('use_ml', False)  # Default to False for stability
+
+        # Map difficulty to search depth
+        depth_map = {
+            'easy': 2,
+            'medium': 3,  # Reduced for serverless
+            'hard': 4
+        }
+        depth = depth_map.get(difficulty, 3)
+
+        # Create new game
+        game_id = secrets.token_hex(8)
+        board = chess.Board()
+
+        # Create bot (ML if available and requested)
+        bot = None
+        ml_enabled = False
+
+        if use_ml and ML_BOT_AVAILABLE:
+            try:
+                bot = FischerBotML(max_depth=depth, use_opening_book=True, use_ml=False)  # Disable ML loading for now
+                ml_enabled = False  # Model not trained yet
+            except Exception as e:
+                print(f"ML bot creation failed: {e}")
+
+        if bot is None:
+            bot = FischerBot(max_depth=depth, use_opening_book=True)
+
+        games[game_id] = {
+            'board': board,
+            'bot': bot,
+            'difficulty': difficulty
+        }
+
+        return jsonify({
+            'game_id': game_id,
+            'fen': board.fen(),
+            'legal_moves': [move.uci() for move in board.legal_moves],
+            'status': 'playing',
+            'ml_enabled': ml_enabled,
+            'depth': depth
+        })
+
     except Exception as e:
-        print(f"Failed to load ML bot: {e}, using standard bot")
-        bot = FischerBot(max_depth=depth, use_opening_book=True)
-
-    games[game_id] = {
-        'board': board,
-        'bot': bot,
-        'difficulty': difficulty
-    }
-
-    return jsonify({
-        'game_id': game_id,
-        'fen': board.fen(),
-        'legal_moves': [move.uci() for move in board.legal_moves],
-        'status': 'playing',
-        'ml_enabled': isinstance(bot, FischerBotML) and bot.use_ml
-    })
+        return jsonify({'error': f'Failed to create game: {str(e)}'}), 500
 
 
 @app.route('/api/move', methods=['POST'])
 def make_move():
     """Make a move and get bot's response."""
-    data = request.json
-    game_id = data.get('game_id')
-    move_uci = data.get('move')
-
-    if game_id not in games:
-        return jsonify({'error': 'Game not found'}), 404
-
-    game = games[game_id]
-    board = game['board']
-    bot = game['bot']
+    if not BOT_AVAILABLE:
+        return jsonify({'error': 'Chess bot not available'}), 500
 
     try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        game_id = data.get('game_id')
+        move_uci = data.get('move')
+
+        if not game_id or not move_uci:
+            return jsonify({'error': 'Missing game_id or move'}), 400
+
+        if game_id not in games:
+            return jsonify({'error': 'Game not found'}), 404
+
+        game = games[game_id]
+        board = game['board']
+        bot = game['bot']
+
         # Make player's move
-        move = chess.Move.from_uci(move_uci)
+        try:
+            move = chess.Move.from_uci(move_uci)
+        except ValueError:
+            return jsonify({'error': 'Invalid move format'}), 400
+
         if move not in board.legal_moves:
             return jsonify({'error': 'Illegal move'}), 400
 
@@ -120,7 +186,10 @@ def make_move():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        print(f"Error in make_move: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Move failed: {str(e)}'}), 500
 
 
 @app.route('/api/game_state/<game_id>', methods=['GET'])
@@ -129,39 +198,25 @@ def game_state(game_id):
     if game_id not in games:
         return jsonify({'error': 'Game not found'}), 404
 
-    game = games[game_id]
-    board = game['board']
+    try:
+        game = games[game_id]
+        board = game['board']
 
-    return jsonify({
-        'fen': board.fen(),
-        'legal_moves': [move.uci() for move in board.legal_moves],
-        'status': get_game_status(board) if board.is_game_over() else 'playing'
-    })
-
-
-@app.route('/api/analysis/<game_id>', methods=['GET'])
-def get_analysis(game_id):
-    """Get Fischer-style analysis of current position."""
-    if game_id not in games:
-        return jsonify({'error': 'Game not found'}), 404
-
-    game = games[game_id]
-    board = game['board']
-    bot = game['bot']
-
-    # Get analysis if using ML bot
-    if isinstance(bot, FischerBotML):
-        analysis = bot.get_fischer_analysis(board)
-        return jsonify(analysis)
-    else:
-        return jsonify({'error': 'Analysis only available with ML bot'}), 400
+        return jsonify({
+            'fen': board.fen(),
+            'legal_moves': [move.uci() for move in board.legal_moves],
+            'status': get_game_status(board) if board.is_game_over() else 'playing',
+            'move_count': len(board.move_stack)
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to get game state: {str(e)}'}), 500
 
 
 def get_game_status(board):
     """Get the game status."""
     if board.is_checkmate():
-        winner = 'Black' if board.turn == chess.WHITE else 'White'
-        return f'checkmate_{winner.lower()}'
+        winner = 'black' if board.turn == chess.WHITE else 'white'
+        return f'checkmate_{winner}'
     elif board.is_stalemate():
         return 'stalemate'
     elif board.is_insufficient_material():
@@ -174,14 +229,15 @@ def get_game_status(board):
         return 'playing'
 
 
-# Vercel serverless handler
-def handler(request):
-    """Handler for Vercel serverless function."""
-    with app.request_context(request.environ):
-        try:
-            return app.full_dispatch_request()
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+# Error handlers
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Not found'}), 404
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'error': 'Internal server error'}), 500
 
 
 # For local development
