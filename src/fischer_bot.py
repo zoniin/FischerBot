@@ -33,6 +33,7 @@ class FischerBot:
         self.use_opening_book = use_opening_book
         self.nodes_searched = 0
         self.transposition_table = {}
+        self.killer_moves = {}  # Store killer moves for better move ordering
 
     def get_move(self, board: chess.Board) -> chess.Move:
         """
@@ -139,7 +140,7 @@ class FischerBot:
 
         # Terminal node or max depth reached
         if depth == 0 or board.is_game_over():
-            score = self.quiescence_search(board, alpha, beta, maximizing, 3)
+            score = self.quiescence_search(board, alpha, beta, maximizing, 2)
             self.transposition_table[board_hash] = (depth, score)
             return score
 

@@ -91,11 +91,11 @@ def new_game():
 
         # Map difficulty to search depth
         depth_map = {
-            'easy': 2,     # Beginner (quick, makes mistakes)
-            'medium': 5,   # Strong club player
-            'hard': 6      # Expert/Master level (Fischer-like!)
+            'easy': 2,     # Beginner - Fast (<1s)
+            'medium': 3,   # Intermediate - Quick (1-2s)
+            'hard': 4      # Advanced - Playable (2-5s)
         }
-        depth = depth_map.get(difficulty, 5)
+        depth = depth_map.get(difficulty, 3)
 
         # Create new game
         game_id = secrets.token_hex(8)

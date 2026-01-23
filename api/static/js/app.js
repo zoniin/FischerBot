@@ -89,6 +89,10 @@ function onDrop(source, target) {
         return 'snapback';
     }
 
+    // Update move history immediately after player's move
+    updateMoveHistory();
+    updateTurnIndicator();
+
     // Make move on server
     makeMove(move.from + move.to + (move.promotion || ''));
 
