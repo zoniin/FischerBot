@@ -91,11 +91,11 @@ def new_game():
 
         # Map difficulty to search depth
         depth_map = {
-            'easy': 2,
-            'medium': 3,  # Reduced for serverless
-            'hard': 4
+            'easy': 1,    # Instant moves
+            'medium': 2,  # Fast moves
+            'hard': 3     # Moderate speed
         }
-        depth = depth_map.get(difficulty, 3)
+        depth = depth_map.get(difficulty, 2)
 
         # Create new game
         game_id = secrets.token_hex(8)
@@ -178,9 +178,15 @@ def make_move():
                 'bot_move': None
             })
 
-        # Get bot's move
-        bot_move = bot.get_move(board)
-        board.push(bot_move)
+        # Get bot's move with error handling
+        try:
+            bot_move = bot.get_move(board)
+            if not bot_move:
+                return jsonify({'error': 'Bot failed to find a move'}), 500
+            board.push(bot_move)
+        except Exception as bot_error:
+            print(f"Bot move error: {bot_error}")
+            return jsonify({'error': f'Bot calculation failed: {str(bot_error)}'}), 500
 
         # Check if game is over after bot's move
         status = get_game_status(board) if board.is_game_over() else 'playing'

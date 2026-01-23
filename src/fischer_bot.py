@@ -136,7 +136,7 @@ class FischerBot:
 
         # Terminal node or max depth reached
         if depth == 0 or board.is_game_over():
-            score = self.quiescence_search(board, alpha, beta, maximizing, 3)
+            score = self.quiescence_search(board, alpha, beta, maximizing, 2)
             self.transposition_table[board_hash] = (depth, score)
             return score
 
