@@ -37,7 +37,7 @@ class FischerBot:
 
     def get_move(self, board: chess.Board) -> chess.Move:
         """
-        Get the best move for the current position.
+        Get the best move for the current position using iterative deepening.
 
         Args:
             board: Current chess position
@@ -45,6 +45,8 @@ class FischerBot:
         Returns:
             Best move according to Fischer's style
         """
+        import time
+
         self.nodes_searched = 0
         # Don't clear transposition table - it speeds up searches!
         # Only clear if it gets too large
@@ -64,10 +66,37 @@ class FischerBot:
                 print(f"Fischer Bot (Principles): {principled_move.uci()}")
                 return principled_move
 
-        # Search for best move
-        best_move, best_score = self.search(board, self.max_depth)
+        # Iterative deepening with time limit
+        start_time = time.time()
+        time_limit = 8.0  # 8 seconds max (stay under 10s serverless limit)
 
-        print(f"Fischer Bot: {best_move.uci()} (score: {best_score:.1f}, nodes: {self.nodes_searched})")
+        best_move = None
+        best_score = float('-inf') if board.turn == chess.WHITE else float('inf')
+
+        # Search progressively deeper until time runs out
+        for depth in range(1, self.max_depth + 1):
+            elapsed = time.time() - start_time
+            if elapsed > time_limit:
+                break
+
+            try:
+                move, score = self.search(board, depth)
+                if move:
+                    best_move = move
+                    best_score = score
+                    print(f"Depth {depth}: {move.uci()} (score: {score:.1f}, time: {elapsed:.2f}s)")
+
+                # Stop if we're getting close to time limit
+                if elapsed > time_limit * 0.8:
+                    break
+            except:
+                break
+
+        if best_move is None:
+            # Fallback: just pick first legal move
+            best_move = list(board.legal_moves)[0]
+
+        print(f"Fischer Bot: {best_move.uci()} (final score: {best_score:.1f}, nodes: {self.nodes_searched}, time: {time.time()-start_time:.2f}s)")
 
         return best_move
 
