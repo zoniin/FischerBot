@@ -45,7 +45,10 @@ class FischerBot:
             Best move according to Fischer's style
         """
         self.nodes_searched = 0
-        self.transposition_table.clear()
+        # Don't clear transposition table - it speeds up searches!
+        # Only clear if it gets too large
+        if len(self.transposition_table) > 10000:
+            self.transposition_table.clear()
 
         # Check opening book first
         if self.use_opening_book and len(board.move_stack) < 15:
@@ -136,7 +139,7 @@ class FischerBot:
 
         # Terminal node or max depth reached
         if depth == 0 or board.is_game_over():
-            score = self.quiescence_search(board, alpha, beta, maximizing, 2)
+            score = self.quiescence_search(board, alpha, beta, maximizing, 3)
             self.transposition_table[board_hash] = (depth, score)
             return score
 
@@ -250,7 +253,7 @@ class FischerBot:
                 captured_piece = board.piece_at(move.to_square)
                 moving_piece = board.piece_at(move.from_square)
                 if captured_piece and moving_piece:
-                    from evaluation import PIECE_VALUES
+                    from .evaluation import PIECE_VALUES
                     priority += PIECE_VALUES[captured_piece.piece_type] * 10
                     priority -= PIECE_VALUES[moving_piece.piece_type]
 
@@ -260,7 +263,7 @@ class FischerBot:
 
             # Promotions
             if move.promotion:
-                from evaluation import PIECE_VALUES
+                from .evaluation import PIECE_VALUES
                 priority += PIECE_VALUES[move.promotion]
 
             # Castle (Fischer liked to castle!)
