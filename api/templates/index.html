@@ -3,276 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fischer Bot - Play Against Bobby Fischer's Style</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 600px;
-            width: 100%;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        .subtitle {
-            color: #666;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .info-box {
-            background: #f0f4ff;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-        }
-        .info-box h3 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 18px;
-        }
-        .info-box ul {
-            margin-left: 20px;
-            color: #555;
-        }
-        .info-box li {
-            margin: 5px 0;
-        }
-        .api-section {
-            margin: 20px 0;
-        }
-        .api-section h3 {
-            color: #333;
-            margin-bottom: 15px;
-        }
-        .endpoint {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 5px;
-            padding: 15px;
-            margin: 10px 0;
-            font-family: 'Courier New', monospace;
-        }
-        .endpoint .method {
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-weight: bold;
-            font-size: 12px;
-            margin-right: 10px;
-        }
-        .endpoint .path {
-            color: #333;
-            font-weight: bold;
-        }
-        .endpoint .description {
-            color: #666;
-            margin-top: 5px;
-            font-size: 14px;
-        }
-        .status {
-            background: #28a745;
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            width: 100%;
-            margin-top: 20px;
-            transition: background 0.3s;
-        }
-        .button:hover {
-            background: #5568d3;
-        }
-        .code-block {
-            background: #2d2d2d;
-            color: #f8f8f2;
-            padding: 15px;
-            border-radius: 5px;
-            overflow-x: auto;
-            margin: 10px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-        }
-        .links {
-            text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #dee2e6;
-        }
-        .links a {
-            color: #667eea;
-            text-decoration: none;
-            margin: 0 10px;
-        }
-        .links a:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <title>FischerBot - Chess Engine Inspired by Bobby Fischer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♔</text></svg>">
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>♟️ Fischer Bot API</h1>
-        <p class="subtitle">ML-Enhanced Chess Engine Inspired by Bobby Fischer</p>
+        <header>
+            <h1>♔ FischerBot ♚</h1>
+            <p class="tagline">A chess engine inspired by the legendary Bobby Fischer</p>
+        </header>
 
-        <div class="status" id="status">
-            ⏳ Checking API status...
-        </div>
+        <div class="game-container">
+            <div class="left-panel">
+                <div class="controls">
+                    <h2>Game Controls</h2>
 
-        <div class="info-box">
-            <h3>About Fischer Bot</h3>
-            <ul>
-                <li>Chess engine trained on Bobby Fischer's games</li>
-                <li>Hybrid ML + alpha-beta search algorithm</li>
-                <li>1972 World Championship style</li>
-                <li>RESTful JSON API</li>
-            </ul>
-        </div>
+                    <div class="difficulty-selector">
+                        <label>Difficulty Level:</label>
+                        <select id="difficulty">
+                            <option value="easy">Easy - Beginner</option>
+                            <option value="medium" selected>Medium - Intermediate</option>
+                            <option value="hard">Hard - Advanced</option>
+                        </select>
+                    </div>
 
-        <div class="api-section">
-            <h3>API Endpoints</h3>
+                    <button id="new-game-btn" class="btn btn-primary">New Game</button>
+                    <button id="flip-board-btn" class="btn btn-secondary">Flip Board</button>
+                </div>
 
-            <div class="endpoint">
-                <span class="method">GET</span>
-                <span class="path">/api/health</span>
-                <div class="description">Check API health status</div>
+                <div class="game-info">
+                    <h2>Game Status</h2>
+                    <div id="status" class="status-text">Click "New Game" to start</div>
+                    <div id="turn-indicator" class="turn-indicator"></div>
+                </div>
+
+                <div class="move-history">
+                    <h2>Move History</h2>
+                    <div id="moves-list" class="moves-list"></div>
+                </div>
             </div>
 
-            <div class="endpoint">
-                <span class="method">POST</span>
-                <span class="path">/api/new_game</span>
-                <div class="description">Start a new chess game</div>
+            <div class="board-container">
+                <div id="board" class="chess-board"></div>
+                <div id="thinking-indicator" class="thinking-indicator" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Fischer Bot is thinking...</span>
+                </div>
             </div>
 
-            <div class="endpoint">
-                <span class="method">POST</span>
-                <span class="path">/api/move</span>
-                <div class="description">Make a move and get bot's response</div>
+            <div class="right-panel">
+                <div class="about">
+                    <h2>About FischerBot</h2>
+                    <p>FischerBot is a chess engine inspired by Bobby Fischer's legendary playing style. Experience the aggressive and tactical gameplay that made Fischer a chess icon.</p>
+                    <ul>
+                        <li>⚔️ Aggressive, tactical play</li>
+                        <li>📚 Strong opening preparation</li>
+                        <li>👑 Excellent endgame technique</li>
+                        <li>⚡ Active piece play</li>
+                    </ul>
+                </div>
+
+                <div class="features">
+                    <h2>Features</h2>
+                    <ul>
+                        <li>Alpha-beta search algorithm</li>
+                        <li>Quiescence search for tactics</li>
+                        <li>Opening book database</li>
+                        <li>Transposition tables</li>
+                        <li>Advanced move ordering</li>
+                    </ul>
+                </div>
             </div>
-
-            <div class="endpoint">
-                <span class="method">GET</span>
-                <span class="path">/api/game_state/:game_id</span>
-                <div class="description">Get current game state</div>
-            </div>
-        </div>
-
-        <div class="api-section">
-            <h3>Quick Start</h3>
-            <div class="code-block">
-# Start a new game
-curl -X POST https://your-url.vercel.app/api/new_game \
-  -H "Content-Type: application/json" \
-  -d '{"difficulty": "medium"}'
-
-# Make a move
-curl -X POST https://your-url.vercel.app/api/move \
-  -H "Content-Type: application/json" \
-  -d '{"game_id": "...", "move": "e2e4"}'
-            </div>
-        </div>
-
-        <button class="button" onclick="testAPI()">Test API</button>
-
-        <div class="links">
-            <a href="https://github.com/zoniin/FischerBot" target="_blank">GitHub</a>
-            <a href="/api/health">Health Check</a>
         </div>
     </div>
 
-    <script>
-        async function checkStatus() {
-            try {
-                const response = await fetch('/api/health');
-                const data = await response.json();
-                const statusDiv = document.getElementById('status');
-
-                if (data.status === 'healthy') {
-                    statusDiv.innerHTML = '✅ API is running - Bot Available: ' +
-                        (data.bot_available ? 'Yes' : 'No') +
-                        ' | ML Available: ' + (data.ml_available ? 'Yes' : 'No');
-                    statusDiv.style.background = '#28a745';
-                } else {
-                    statusDiv.innerHTML = '⚠️ API is unhealthy';
-                    statusDiv.style.background = '#ffc107';
-                }
-            } catch (error) {
-                const statusDiv = document.getElementById('status');
-                statusDiv.innerHTML = '❌ API connection failed';
-                statusDiv.style.background = '#dc3545';
-            }
-        }
-
-        async function testAPI() {
-            try {
-                // Create new game
-                const newGameResponse = await fetch('/api/new_game', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ difficulty: 'medium' })
-                });
-                const game = await newGameResponse.json();
-
-                if (game.game_id) {
-                    // Make a test move (e2e4)
-                    const moveResponse = await fetch('/api/move', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            game_id: game.game_id,
-                            move: 'e2e4'
-                        })
-                    });
-                    const moveResult = await moveResponse.json();
-
-                    alert('✅ Test successful!\\n\\n' +
-                          'You played: e2e4\\n' +
-                          'Fischer Bot played: ' + moveResult.bot_move + '\\n\\n' +
-                          'API is working correctly!');
-                } else {
-                    alert('❌ Failed to create game: ' + JSON.stringify(game));
-                }
-            } catch (error) {
-                alert('❌ Test failed: ' + error.message);
-            }
-        }
-
-        // Check status on load
-        checkStatus();
-    </script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
