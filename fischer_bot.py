@@ -94,7 +94,7 @@ class FischerBot:
 
         for move in ordered_moves:
             board.push(move)
-            score = self.alpha_beta(board, depth - 1, alpha, beta, not board.turn)
+            score = self.alpha_beta(board, depth - 1, alpha, beta, board.turn == chess.WHITE)
             board.pop()
 
             if board.turn == chess.WHITE:
