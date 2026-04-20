@@ -16,6 +16,15 @@ import chess.svg
 from src.fischer_bot import FischerBot
 import secrets
 
+# Try to import ML bot
+try:
+    from src.fischer_bot_ml import FischerBotML
+    ML_AVAILABLE = True
+    print("ML Bot available - using trained Fischer model!")
+except ImportError as e:
+    print(f"ML Bot not available: {e}")
+    ML_AVAILABLE = False
+
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
@@ -35,18 +44,37 @@ def new_game():
     data = request.json
     difficulty = data.get('difficulty', 'medium')
 
-    # Map difficulty to search depth
+    # Map difficulty to search depth (Fischer was 2800+ Elo, needs deep search)
     depth_map = {
-        'easy': 2,
-        'medium': 4,
-        'hard': 6
+        'easy': 4,      # ~1800 Elo - Still plays principled chess
+        'medium': 6,    # ~2200 Elo - Strong tactical play
+        'hard': 10      # ~2600-2800 Elo - Fischer level!
     }
-    depth = depth_map.get(difficulty, 4)
+    depth = depth_map.get(difficulty, 6)
+
+    # Get ML settings
+    use_ml = data.get('use_ml', True)  # Enable ML by default
+    ml_weight = data.get('ml_weight', 0.5)  # 50% Fischer style, 50% tactical
 
     # Create new game
     game_id = secrets.token_hex(8)
     board = chess.Board()
-    bot = FischerBot(max_depth=depth, use_opening_book=True)
+
+    # Use ML bot if available for Fischer's playing style
+    if ML_AVAILABLE and use_ml:
+        try:
+            bot = FischerBotML(
+                max_depth=depth,
+                use_opening_book=True,
+                use_ml=True,
+                ml_weight=ml_weight
+            )
+            print(f"Created FischerBotML (depth={depth}, ml_weight={ml_weight})")
+        except Exception as e:
+            print(f"Failed to create ML bot: {e}, using traditional bot")
+            bot = FischerBot(max_depth=depth, use_opening_book=True)
+    else:
+        bot = FischerBot(max_depth=depth, use_opening_book=True)
 
     games[game_id] = {
         'board': board,
@@ -58,7 +86,10 @@ def new_game():
         'game_id': game_id,
         'fen': board.fen(),
         'legal_moves': [move.uci() for move in board.legal_moves],
-        'status': 'playing'
+        'status': 'playing',
+        'ml_enabled': isinstance(bot, FischerBotML) if ML_AVAILABLE else False,
+        'depth': depth,
+        'ml_weight': ml_weight if ML_AVAILABLE and use_ml else 0
     })
 
 
