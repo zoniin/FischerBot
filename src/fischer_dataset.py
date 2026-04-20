@@ -219,15 +219,41 @@ def load_default_dataset() -> FischerGameDataset:
     """
     Load default Fischer dataset with sample games.
 
+    Tries to load from data/ directory first, falls back to sample games.
+
     Returns:
         FischerGameDataset with sample games loaded
     """
     dataset = FischerGameDataset()
 
-    # Load sample games from 1972 World Championship
-    dataset.load_pgn_string(FISCHER_1972_WORLD_CHAMPIONSHIP_SAMPLE)
+    # Try to load from data directory
+    data_dir = Path(__file__).parent.parent / "data"
+    games_loaded = False
 
-    # Load sample games from 1960s
-    dataset.load_pgn_string(FISCHER_1960S_SAMPLE)
+    # Load My 60 Memorable Games if available
+    pgn_60_games = data_dir / "fischer_60_memorable_games.pgn"
+    if pgn_60_games.exists():
+        print(f"Loading from {pgn_60_games}")
+        dataset.load_pgn_file(str(pgn_60_games))
+        games_loaded = True
+
+    # Load 1972 World Championship if available
+    pgn_1972 = data_dir / "fischer_1972_world_championship.pgn"
+    if pgn_1972.exists():
+        print(f"Loading from {pgn_1972}")
+        dataset.load_pgn_file(str(pgn_1972))
+        games_loaded = True
+
+    # Fall back to sample games if no files found
+    if not games_loaded:
+        print("No PGN files found in data/ directory")
+        print("Loading sample games instead")
+        print("Run 'python fetch_fischer_games.py' to download full dataset")
+
+        # Load sample games from 1972 World Championship
+        dataset.load_pgn_string(FISCHER_1972_WORLD_CHAMPIONSHIP_SAMPLE)
+
+        # Load sample games from 1960s
+        dataset.load_pgn_string(FISCHER_1960S_SAMPLE)
 
     return dataset

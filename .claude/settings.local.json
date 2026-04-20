@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(findstr:*)",
+      "Bash(pip show:*)",
+      "Bash(python app.py:*)",
+      "Bash(dir \"C:\\Users\\jarre\\Downloads\\FischerBot\\static\\img\\pieces\")",
+      "Bash(cat:*)"
+    ]
+  }
+}
