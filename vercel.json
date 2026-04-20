@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "api/index.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
     }
   ],
   "routes": [
@@ -14,5 +17,6 @@
   ],
   "env": {
     "PYTHON_VERSION": "3.9"
-  }
+  },
+  "installCommand": "pip install -r requirements-vercel.txt"
 }
