@@ -41,13 +41,29 @@ class FischerBotML(FischerBot):
 
         # Try to load ML model
         if use_ml:
-            model_path = Path(__file__).parent.parent / "models" / "fischer_model.pkl"
-            if model_path.exists():
-                self.ml_engine = FischerMLEngine(str(model_path))
-                print("ML model loaded successfully")
+            # Try PyTorch model first
+            pytorch_model_path = Path(__file__).parent.parent / "models" / "fischer_model_pytorch.pth"
+            pkl_model_path = Path(__file__).parent.parent / "models" / "fischer_model.pkl"
+
+            if pytorch_model_path.exists():
+                try:
+                    from .ml_engine_pytorch import FischerMLEnginePyTorch
+                    self.ml_engine = FischerMLEnginePyTorch(str(pytorch_model_path))
+                    print("PyTorch ML model loaded successfully")
+                except ImportError:
+                    print("PyTorch not available, trying pickle model...")
+                    if pkl_model_path.exists():
+                        self.ml_engine = FischerMLEngine(str(pkl_model_path))
+                        print("Pickle ML model loaded successfully")
+                    else:
+                        print("No ML model found")
+                        self.use_ml = False
+            elif pkl_model_path.exists():
+                self.ml_engine = FischerMLEngine(str(pkl_model_path))
+                print("Pickle ML model loaded successfully")
             else:
-                print(f"ML model not found at {model_path}")
-                print("Run 'python train_model.py' to train the model")
+                print(f"ML model not found at {pytorch_model_path} or {pkl_model_path}")
+                print("Run 'python train_model_pytorch.py' to train the model")
                 print("Falling back to traditional search")
                 self.use_ml = False
 
@@ -114,7 +130,7 @@ class FischerBotML(FischerBot):
             search_score = self.alpha_beta(
                 board, self.max_depth - 1,
                 float('-inf'), float('inf'),
-                not board.turn
+                board.turn == chess.WHITE
             )
             board.pop()
 
