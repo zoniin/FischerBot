@@ -3,19 +3,26 @@ Flask web server for Fischer Bot.
 Provides a chess.com-inspired web interface to play against the bot.
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from flask import Flask, render_template, jsonify, request
 import chess
-from fischer_bot import FischerBot
+from src.stockfish_bot import StockfishBot
 
 app = Flask(__name__,
-           template_folder='web/templates',
-           static_folder='web/static',
+           template_folder='templates',
+           static_folder='static',
            static_url_path='/static')
 
 # Game state
 game_state = {
     'board': chess.Board(),
-    'bot': FischerBot(max_depth=4),
+    'bot': StockfishBot(max_depth=15, skill_level=20),
     'player_color': chess.WHITE,
     'move_history': []
 }
@@ -36,7 +43,7 @@ def new_game():
     game_state['board'] = chess.Board()
     game_state['player_color'] = chess.WHITE if player_color == 'white' else chess.BLACK
     game_state['move_history'] = []
-    game_state['bot'] = FischerBot(max_depth=4)
+    game_state['bot'] = StockfishBot(max_depth=15, skill_level=20)
 
     return jsonify({
         'success': True,
@@ -248,7 +255,7 @@ def piece_to_char(piece):
 
 def evaluate_board(board):
     """Get board evaluation."""
-    from evaluation import evaluate_position
+    from src.evaluation import evaluate_position
     return evaluate_position(board) / 100.0  # Convert centipawns to pawns
 
 

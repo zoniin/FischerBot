@@ -1,0 +1,416 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    background: #312e2b;
+    color: #eee;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+header {
+    text-align: center;
+    color: white;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+header h1 {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.tagline {
+    font-size: 1.1em;
+    opacity: 0.85;
+    color: #b4b2af;
+}
+
+.game-container {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.left-panel,
+.right-panel {
+    flex: 1;
+    background: #262421;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.board-container {
+    flex: 0 0 600px;
+    background: #262421;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Chess Board Styling - Wooden Theme */
+.chess-board {
+    margin: 0 auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* Custom board square colors - wooden theme */
+.board-b72b1 {
+    background: linear-gradient(135deg, #b58863 0%, #a67852 100%);
+}
+
+.board-b72b1 .white-1e1d7 {
+    background: linear-gradient(135deg, #f0d9b5 0%, #e8d0a8 100%);
+}
+
+.board-b72b1 .black-3c85d {
+    background: linear-gradient(135deg, #b58863 0%, #a67852 100%);
+}
+
+/* Highlighted squares */
+.board-b72b1 .highlight-white {
+    background: linear-gradient(135deg, #fffacd 0%, #f7e89c 100%);
+    box-shadow: inset 0 0 8px rgba(255, 255, 0, 0.4);
+}
+
+.board-b72b1 .highlight-black {
+    background: linear-gradient(135deg, #d4b896 0%, #c9ad83 100%);
+    box-shadow: inset 0 0 8px rgba(255, 255, 0, 0.4);
+}
+
+/* Square notation styling */
+.board-b72b1 .notation-322f9 {
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.6;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+h2 {
+    color: #fff;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    font-weight: 600;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.controls {
+    margin-bottom: 30px;
+}
+
+.difficulty-selector {
+    margin: 15px 0;
+}
+
+.difficulty-selector label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #b4b2af;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.difficulty-selector select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    font-size: 1em;
+    background: #1a1916;
+    color: #eee;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.difficulty-selector select:hover {
+    border-color: rgba(129, 182, 76, 0.5);
+    background: #222;
+}
+
+.difficulty-selector select:focus {
+    outline: none;
+    border-color: #81b64c;
+}
+
+.btn {
+    width: 100%;
+    padding: 14px;
+    margin: 10px 0;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: none;
+    letter-spacing: 0.3px;
+}
+
+.btn-primary {
+    background: #81b64c;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #7aa646;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(129, 182, 76, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-secondary {
+    background: #4a4845;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a5754;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-secondary:active {
+    transform: translateY(0);
+}
+
+.game-info {
+    margin-bottom: 30px;
+}
+
+.status-text {
+    padding: 15px;
+    background: rgba(129, 182, 76, 0.15);
+    border-left: 4px solid #81b64c;
+    border-radius: 6px;
+    font-weight: 500;
+    margin-bottom: 10px;
+    color: #fff;
+    font-size: 0.95em;
+}
+
+.turn-indicator {
+    text-align: center;
+    font-size: 1em;
+    padding: 12px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.turn-indicator.white-turn {
+    background: rgba(240, 217, 181, 0.2);
+    color: #f0d9b5;
+    border: 1px solid rgba(240, 217, 181, 0.3);
+}
+
+.turn-indicator.black-turn {
+    background: rgba(181, 136, 99, 0.2);
+    color: #b58863;
+    border: 1px solid rgba(181, 136, 99, 0.3);
+}
+
+.move-history {
+    max-height: 300px;
+}
+
+.moves-list {
+    background: #1a1916;
+    border-radius: 6px;
+    padding: 15px;
+    max-height: 250px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.moves-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.moves-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.moves-list::-webkit-scrollbar-thumb {
+    background: rgba(129, 182, 76, 0.4);
+    border-radius: 4px;
+}
+
+.moves-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(129, 182, 76, 0.6);
+}
+
+.move-entry {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-family: 'Courier New', monospace;
+    font-size: 0.95em;
+    color: #b4b2af;
+}
+
+.move-entry:last-child {
+    border-bottom: none;
+}
+
+.move-number {
+    font-weight: bold;
+    color: #81b64c;
+    margin-right: 10px;
+    min-width: 30px;
+    display: inline-block;
+}
+
+.white-move,
+.black-move {
+    color: #eee;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin: 0 4px;
+}
+
+.white-move {
+    background: rgba(240, 217, 181, 0.1);
+}
+
+.black-move {
+    background: rgba(181, 136, 99, 0.1);
+}
+
+.thinking-indicator {
+    text-align: center;
+    padding: 20px;
+    margin-top: 20px;
+    background: rgba(129, 182, 76, 0.15);
+    border-radius: 6px;
+    border: 2px solid rgba(129, 182, 76, 0.3);
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(129, 182, 76, 0.2);
+    border-top: 3px solid #81b64c;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.about,
+.features {
+    margin-bottom: 30px;
+}
+
+.about p,
+.features p {
+    line-height: 1.7;
+    color: #b4b2af;
+    margin-bottom: 10px;
+    font-size: 0.95em;
+}
+
+.about ul,
+.features ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.about li,
+.features li {
+    padding: 10px 0;
+    color: #b4b2af;
+    line-height: 1.6;
+    font-size: 0.95em;
+}
+
+.about li::before {
+    content: '';
+    margin-right: 10px;
+}
+
+.features li::before {
+    content: '✓';
+    color: #81b64c;
+    font-weight: bold;
+    margin-right: 10px;
+    font-size: 1.1em;
+}
+
+/* Chess piece hover effect */
+.chess-board img {
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.chess-board img:hover {
+    transform: scale(1.05);
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+    .game-container {
+        flex-direction: column;
+    }
+
+    .board-container {
+        flex: 1;
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .left-panel,
+    .right-panel {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    header h1 {
+        font-size: 2em;
+    }
+
+    .tagline {
+        font-size: 1em;
+    }
+
+    .board-container {
+        padding: 15px;
+    }
+
+    #board {
+        width: 100% !important;
+    }
+}

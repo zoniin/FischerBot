@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FischerBot - Chess Engine Inspired by Bobby Fischer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♔</text></svg>">
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>♔ FischerBot ♚</h1>
+            <p class="tagline">A chess engine inspired by the legendary Bobby Fischer</p>
+        </header>
+
+        <div class="game-container">
+            <div class="left-panel">
+                <div class="controls">
+                    <h2>Game Controls</h2>
+
+                    <div class="difficulty-selector">
+                        <label>Difficulty Level:</label>
+                        <select id="difficulty">
+                            <option value="easy">Easy - Beginner</option>
+                            <option value="medium" selected>Medium - Intermediate</option>
+                            <option value="hard">Hard - Advanced</option>
+                        </select>
+                    </div>
+
+                    <button id="new-game-btn" class="btn btn-primary">New Game</button>
+                    <button id="flip-board-btn" class="btn btn-secondary">Flip Board</button>
+                </div>
+
+                <div class="game-info">
+                    <h2>Game Status</h2>
+                    <div id="status" class="status-text">Click "New Game" to start</div>
+                    <div id="turn-indicator" class="turn-indicator"></div>
+                </div>
+
+                <div class="move-history">
+                    <h2>Move History</h2>
+                    <div id="moves-list" class="moves-list"></div>
+                </div>
+            </div>
+
+            <div class="board-container">
+                <div id="board" class="chess-board"></div>
+                <div id="thinking-indicator" class="thinking-indicator" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Fischer Bot is thinking...</span>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="about">
+                    <h2>About FischerBot</h2>
+                    <p>FischerBot is a chess engine inspired by Bobby Fischer's legendary playing style. Experience the aggressive and tactical gameplay that made Fischer a chess icon.</p>
+                    <ul>
+                        <li>⚔️ Aggressive, tactical play</li>
+                        <li>📚 Strong opening preparation</li>
+                        <li>👑 Excellent endgame technique</li>
+                        <li>⚡ Active piece play</li>
+                    </ul>
+                </div>
+
+                <div class="features">
+                    <h2>Features</h2>
+                    <ul>
+                        <li>Alpha-beta search algorithm</li>
+                        <li>Quiescence search for tactics</li>
+                        <li>Opening book database</li>
+                        <li>Transposition tables</li>
+                        <li>Advanced move ordering</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

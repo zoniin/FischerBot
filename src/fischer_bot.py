@@ -6,8 +6,8 @@ Uses alpha-beta search with Fischer-style evaluation.
 import chess
 import random
 from typing import Tuple, Optional
-from evaluation import evaluate_position
-from openings import get_opening_move, get_principled_opening_move, is_in_opening_book
+from .evaluation import evaluate_position
+from .openings import get_opening_move, get_principled_opening_move, is_in_opening_book
 
 
 class FischerBot:
@@ -33,10 +33,11 @@ class FischerBot:
         self.use_opening_book = use_opening_book
         self.nodes_searched = 0
         self.transposition_table = {}
+        self.killer_moves = {}  # Store killer moves for better move ordering
 
     def get_move(self, board: chess.Board) -> chess.Move:
         """
-        Get the best move for the current position.
+        Get the best move for the current position using iterative deepening.
 
         Args:
             board: Current chess position
@@ -44,8 +45,13 @@ class FischerBot:
         Returns:
             Best move according to Fischer's style
         """
+        import time
+
         self.nodes_searched = 0
-        self.transposition_table.clear()
+        # Don't clear transposition table - it speeds up searches!
+        # Only clear if it gets too large
+        if len(self.transposition_table) > 10000:
+            self.transposition_table.clear()
 
         # Check opening book first
         if self.use_opening_book and len(board.move_stack) < 15:
@@ -60,10 +66,37 @@ class FischerBot:
                 print(f"Fischer Bot (Principles): {principled_move.uci()}")
                 return principled_move
 
-        # Search for best move
-        best_move, best_score = self.search(board, self.max_depth)
+        # Iterative deepening with time limit
+        start_time = time.time()
+        time_limit = 8.0  # 8 seconds max (stay under 10s serverless limit)
 
-        print(f"Fischer Bot: {best_move.uci()} (score: {best_score:.1f}, nodes: {self.nodes_searched})")
+        best_move = None
+        best_score = float('-inf') if board.turn == chess.WHITE else float('inf')
+
+        # Search progressively deeper until time runs out
+        for depth in range(1, self.max_depth + 1):
+            elapsed = time.time() - start_time
+            if elapsed > time_limit:
+                break
+
+            try:
+                move, score = self.search(board, depth)
+                if move:
+                    best_move = move
+                    best_score = score
+                    print(f"Depth {depth}: {move.uci()} (score: {score:.1f}, time: {elapsed:.2f}s)")
+
+                # Stop if we're getting close to time limit
+                if elapsed > time_limit * 0.8:
+                    break
+            except:
+                break
+
+        if best_move is None:
+            # Fallback: just pick first legal move
+            best_move = list(board.legal_moves)[0]
+
+        print(f"Fischer Bot: {best_move.uci()} (final score: {best_score:.1f}, nodes: {self.nodes_searched}, time: {time.time()-start_time:.2f}s)")
 
         return best_move
 
@@ -136,7 +169,7 @@ class FischerBot:
 
         # Terminal node or max depth reached
         if depth == 0 or board.is_game_over():
-            score = self.quiescence_search(board, alpha, beta, maximizing, 3)
+            score = self.quiescence_search(board, alpha, beta, maximizing, 2)
             self.transposition_table[board_hash] = (depth, score)
             return score
 
@@ -250,7 +283,7 @@ class FischerBot:
                 captured_piece = board.piece_at(move.to_square)
                 moving_piece = board.piece_at(move.from_square)
                 if captured_piece and moving_piece:
-                    from evaluation import PIECE_VALUES
+                    from .evaluation import PIECE_VALUES
                     priority += PIECE_VALUES[captured_piece.piece_type] * 10
                     priority -= PIECE_VALUES[moving_piece.piece_type]
 
@@ -260,7 +293,7 @@ class FischerBot:
 
             # Promotions
             if move.promotion:
-                from evaluation import PIECE_VALUES
+                from .evaluation import PIECE_VALUES
                 priority += PIECE_VALUES[move.promotion]
 
             # Castle (Fischer liked to castle!)
