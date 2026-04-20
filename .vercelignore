@@ -24,3 +24,16 @@ docs/
 examples/
 .vscode/
 .idea/
+models/
+data/
+stockfish/
+web/
+train_model.py
+train_model_pytorch.py
+evaluate_model.py
+fetch_fischer_games.py
+*.md
+!README.md
+*.pth
+*.pkl
+*.pgn
