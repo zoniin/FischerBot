@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -42,9 +42,20 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Chess games
-*.pgn
+# Chess games: the real corpus in data/ IS tracked
+data/Fischer.pgn
+data/m60mg_cursor.pgn
 
 # Stockfish engine (large binary files)
 /stockfish/
 stockfish.zip
+
+# Scratch/diagnostic files
+scratch_*.py
+diagnose.py
+validate_data.py
+
+.gstack/
+
+.gstack/
+

@@ -1,0 +1,85 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FischerBot â€” Chess in the Style of Bobby Fischer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9816;</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/vendor/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <header class="masthead">
+    <p class="eyebrow">Reykjav&iacute;k &middot; 1972 &middot; board one</p>
+    <h1 class="masthead-title">FISCHERBOT</h1>
+    <p class="masthead-sub">Trained on <em>My 60 Memorable Games</em> &amp; the 1972 World Championship</p>
+  </header>
+
+  <main class="stage">
+
+    <aside class="col col-controls">
+      <section class="panel" aria-labelledby="controls-heading">
+        <h2 id="controls-heading" class="panel-title">New game</h2>
+        <div class="field">
+          <span class="field-label" id="color-label">Play as</span>
+          <div class="seg" role="group" aria-labelledby="color-label">
+            <button type="button" class="seg-btn is-active" data-color="white" aria-pressed="true">White</button>
+            <button type="button" class="seg-btn" data-color="black" aria-pressed="false">Black</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="difficulty">Difficulty</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <button type="button" id="new-game" class="btn-primary">Begin game</button>
+      </section>
+
+      <section class="panel" aria-labelledby="status-heading">
+        <h2 id="status-heading" class="panel-title">Broadcast</h2>
+        <p id="status" class="status-line">Your move â€” White to play</p>
+        <p id="check" class="check-flag" hidden>Check</p>
+        <p id="thinking" class="thinking"><span class="thinking-dot" aria-hidden="true"></span>FischerBot is thinking&hellip;</p>
+        <p id="error" class="error-line" role="alert" aria-live="polite" hidden></p>
+      </section>
+    </aside>
+
+    <div class="col col-board">
+      <div class="board-frame">
+        <div id="board" aria-label="Chess board"></div>
+        <div id="banner" class="banner" role="status"></div>
+      </div>
+    </div>
+
+    <aside class="col col-sheet">
+      <section class="panel panel-sheet" aria-labelledby="sheet-heading">
+        <h2 id="sheet-heading" class="panel-title">Scoresheet</h2>
+        <ol id="scoresheet" class="scoresheet">
+          <li class="scoresheet-empty">No moves recorded.</li>
+        </ol>
+      </section>
+      <section id="book-panel" class="panel panel-book" aria-labelledby="book-heading">
+        <h2 id="book-heading" class="panel-title">Fischer&rsquo;s book</h2>
+        <p id="book-note" class="book-note">Awaiting the first move.</p>
+      </section>
+    </aside>
+
+  </main>
+
+  <footer class="colophon">
+    <p>Alpha&ndash;beta search over an opening book drawn from Fischer&rsquo;s own games, with a style model on top.</p>
+  </footer>
+
+  <script src="/static/vendor/jquery-3.6.0.min.js"></script>
+  <script src="/static/vendor/chessboard-1.0.0.min.js"></script>
+  <script src="/static/vendor/chess-0.10.3.min.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,129 +1,77 @@
-# Fischer Bot - ML-Enhanced Chess Engine
+# FischerBot
 
-A chess bot that emulates the legendary playing style of Bobby Fischer, World Chess Champion (1972-1975). Now enhanced with machine learning trained on Fischer's actual games!
+A chess bot that plays in the style of Bobby Fischer, built from his real games:
+all 60 games of **My 60 Memorable Games** and all 21 games of the
+**1972 World Championship** match against Boris Spassky.
 
-## Features
+## How it plays
 
-### Core Engine
-- **Aggressive, Tactical Play**: Prioritizes sharp, forcing variations
-- **Fischer's Opening Repertoire**: Plays 1.e4 as White, fights for the initiative as Black
-- **Strong Endgame Technique**: Emphasis on converting advantages
-- **Pattern Recognition**: Recognizes tactical motifs Fischer frequently employed
-- **Open Positions**: Prefers active piece play and open files
+1. **Opening book from Fischer's actual games.** Positions are keyed by board
+   state (transposition-aware), and only moves *Fischer himself* played are in
+   the book — weighted by frequency and results. Every book move comes with a
+   citation, e.g. *"Fischer–Spassky, World Championship 1972, Game 6"*.
+2. **A real search engine.** Negamax alpha-beta with iterative deepening, a
+   transposition table with bound flags, null-move pruning, killer/history
+   move ordering, quiescence search, and a hard per-move time budget.
+3. **A trained style model.** A conditional-logit move ranker trained on the
+   ~3,200 moves Fischer played in the corpus (real gradients, game-level
+   held-out validation; top-3 accuracy ≈ 40% vs 5% random baseline). When
+   several moves are near-equal, the bot plays the most Fischer-like one —
+   each candidate is first verified by a null-window search so style never
+   costs more than a configurable margin (default 0.3 pawns).
 
-### NEW: Machine Learning Enhancements
-- **ML-Trained Move Prediction**: Neural network trained on Fischer's 1960s games and 1972 World Championship
-- **Hybrid Engine**: Combines ML intuition with traditional alpha-beta search
-- **Fischer Game Dataset**: Curated collection of Fischer's most important games
-- **Adjustable Playing Style**: Configure the balance between ML and search
-- **Fischer-Style Analysis**: Get insights into Fischer's likely moves
+## Quick start
 
-## Installation
-
-\`\`\`bash
-# Clone the repository
-git clone https://github.com/zoniin/FischerBot.git
-cd FischerBot
-
-# Install dependencies
+```bash
 pip install -r requirements.txt
-\`\`\`
+python app.py          # -> http://127.0.0.1:5000
+```
 
-## Quick Start
+Play in the browser: choose your color and difficulty, and watch the book
+citations as the bot follows Fischer's real games.
 
-### Play with Standard Bot
-\`\`\`bash
-python examples/main.py
-\`\`\`
+## API
 
-### Train and Use ML Bot
-\`\`\`bash
-# Train the model on Fischer's games
-python train_model.py
+The API is stateless — the client sends the full move history each request,
+so it works identically on a laptop or serverless hosting.
 
-# Run ML bot example
-python examples/ml_bot_example.py
-\`\`\`
+```
+POST /api/move
+{"history": ["e2e4", "e7e5"], "difficulty": "easy" | "medium" | "hard"}
 
-### Web Interface
-\`\`\`bash
-cd web/fischer
-python app.py
-# Visit http://localhost:5000
-\`\`\`
+-> {"bot_move": "g1f3", "bot_move_san": "Nf3", "source": "book",
+    "book_citation": "Fischer–...", "fen": "...", "status": "playing", ...}
+```
 
-## Usage
+## Development
 
-### ML-Enhanced Bot
+```bash
+python -m pytest tests -q       # engine/book/style/API test suite
+python train_style.py           # retrain the style model (models/style.json)
+```
 
-\`\`\`python
-from src.fischer_bot_ml import FischerBotML
-import chess
+Project layout:
 
-# Create ML-enhanced bot
-bot = FischerBotML(
-    max_depth=4,           # Search depth
-    use_opening_book=True, # Use Fischer's opening repertoire
-    use_ml=True,           # Enable ML
-    ml_weight=0.4          # 40% ML, 60% search
-)
-
-# Play against Fischer!
-board = chess.Board()
-move = bot.get_move(board)
-board.push(move)
-\`\`\`
-
-### Adjusting Playing Style
-
-\`\`\`python
-# More Fischer-style (intuitive)
-bot.set_ml_weight(0.7)  # 70% ML, 30% search
-
-# More tactical (calculating)
-bot.set_ml_weight(0.2)  # 20% ML, 80% search
-\`\`\`
-
-## Deployment to Vercel
-
-The repository is ready for deployment:
-
-\`\`\`bash
-npm install -g vercel
-cd FischerBot
-vercel
-\`\`\`
-
-See [docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md) for detailed instructions.
-
-## Documentation
-
-- **[ML Improvements](docs/ML_IMPROVEMENTS.md)**: Detailed ML architecture and training
-- **[Vercel Deployment](docs/VERCEL_DEPLOYMENT.md)**: Complete deployment guide
-
-## Project Structure
-
-\`\`\`
-FischerBot/
-├── src/
-│   ├── fischer_bot.py         # Original alpha-beta engine
-│   ├── fischer_bot_ml.py      # ML-enhanced hybrid engine
-│   ├── ml_engine.py           # Neural network
-│   ├── fischer_dataset.py     # Game dataset
-│   ├── evaluation.py          # Position evaluation
-│   └── openings.py            # Opening repertoire
-├── api/index.py               # Vercel serverless function
-├── train_model.py             # Model training script
-└── examples/                  # Usage examples
-\`\`\`
+```
+fischerbot/
+├── engine.py      # negamax alpha-beta search
+├── evaluation.py  # tapered positional evaluation
+├── book.py        # opening book from the real games (with citations)
+├── style.py       # Fischer style model (conditional logit)
+├── dataset.py     # corpus loading (data/m60mg.pgn, data/wc1972.pgn)
+├── bot.py         # book -> search -> style selection
+└── api.py         # stateless Flask API
+data/              # the real PGNs (validated: zero illegal moves)
+models/style.json  # trained style weights (JSON, human-readable)
+web/               # browser UI
+tests/             # pytest suite
+```
 
 ## Requirements
 
-- Python 3.8+
-- python-chess >= 1.9.0
-- flask >= 2.3.0
-- numpy >= 1.24.0
+- Python 3.9+
+- python-chess ≥ 1.10, Flask ≥ 2.3, NumPy ≥ 1.24
 
 ## License
 
-MIT License
+MIT
