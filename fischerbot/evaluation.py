@@ -1,321 +1,516 @@
 """Tapered positional evaluation.
 
-Scores are centipawns from White's perspective. The middlegame and endgame
-piece-square tables are blended by remaining material (PeSTO-style phase),
-with light pawn-structure, king-shield, rook-file and bishop-pair terms.
+Scores are centipawns. Middlegame and endgame values are blended by the
+material left on the board. On top of piece-square tables the evaluation
+knows about pawn structure (doubled, isolated and passed pawns), piece
+mobility, rooks on open files, the bishop pair, king safety (pawn shield and
+pieces bearing down on the king) and how to drive a bare king to the edge.
+
+Speed matters as much as knowledge here: the engine is pure Python, so every
+term is computed with bitboard arithmetic, middlegame/endgame scores are
+packed into one integer, and pawn structure is cached by pawn placement.
+
+The piece-square tables are PeSTO's (Ronald Friederich), published on the
+Chess Programming Wiki: https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
 """
 
 import chess
 
-PIECE_VALUES_MG = {
-    chess.PAWN: 100,
-    chess.KNIGHT: 320,
-    chess.BISHOP: 335,
-    chess.ROOK: 500,
-    chess.QUEEN: 950,
-    chess.KING: 0,
-}
-
-PIECE_VALUES_EG = {
-    chess.PAWN: 120,
-    chess.KNIGHT: 300,
-    chess.BISHOP: 330,
-    chess.ROOK: 530,
-    chess.QUEEN: 950,
-    chess.KING: 0,
-}
-
-# Tables are written as seen from White's side (index 0 = a8, 63 = h1),
-# the layout used across engine literature; they are re-indexed below.
-_PAWN_MG = [
-      0,   0,   0,   0,   0,   0,   0,   0,
-     50,  50,  50,  50,  50,  50,  50,  50,
-     10,  10,  20,  30,  30,  20,  10,  10,
-      5,   5,  10,  27,  27,  10,   5,   5,
-      0,   0,   0,  25,  25,   0,   0,   0,
-      5,  -5, -10,   0,   0, -10,  -5,   5,
-      5,  10,  10, -25, -25,  10,  10,   5,
-      0,   0,   0,   0,   0,   0,   0,   0,
-]
-
-_PAWN_EG = [
-      0,   0,   0,   0,   0,   0,   0,   0,
-     90,  90,  90,  90,  90,  90,  90,  90,
-     50,  50,  50,  50,  50,  50,  50,  50,
-     30,  30,  30,  30,  30,  30,  30,  30,
-     15,  15,  15,  15,  15,  15,  15,  15,
-      5,   5,   5,   5,   5,   5,   5,   5,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-]
-
-_KNIGHT = [
-    -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20,   0,   0,   0,   0, -20, -40,
-    -30,   0,  10,  15,  15,  10,   0, -30,
-    -30,   5,  15,  20,  20,  15,   5, -30,
-    -30,   0,  15,  20,  20,  15,   0, -30,
-    -30,   5,  10,  15,  15,  10,   5, -30,
-    -40, -20,   0,   5,   5,   0, -20, -40,
-    -50, -40, -30, -30, -30, -30, -40, -50,
-]
-
-_BISHOP = [
-    -20, -10, -10, -10, -10, -10, -10, -20,
-    -10,   0,   0,   0,   0,   0,   0, -10,
-    -10,   0,   5,  10,  10,   5,   0, -10,
-    -10,   5,   5,  10,  10,   5,   5, -10,
-    -10,   0,  10,  10,  10,  10,   0, -10,
-    -10,  10,  10,  10,  10,  10,  10, -10,
-    -10,   5,   0,   0,   0,   0,   5, -10,
-    -20, -10, -10, -10, -10, -10, -10, -20,
-]
-
-_ROOK = [
-      0,   0,   0,   0,   0,   0,   0,   0,
-      5,  10,  10,  10,  10,  10,  10,   5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-     -5,   0,   0,   0,   0,   0,   0,  -5,
-      0,   0,   0,   5,   5,   0,   0,   0,
-]
-
-_QUEEN = [
-    -20, -10, -10,  -5,  -5, -10, -10, -20,
-    -10,   0,   0,   0,   0,   0,   0, -10,
-    -10,   0,   5,   5,   5,   5,   0, -10,
-     -5,   0,   5,   5,   5,   5,   0,  -5,
-      0,   0,   5,   5,   5,   5,   0,  -5,
-    -10,   5,   5,   5,   5,   5,   0, -10,
-    -10,   0,   5,   0,   0,   0,   0, -10,
-    -20, -10, -10,  -5,  -5, -10, -10, -20,
-]
-
-_KING_MG = [
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -30, -40, -40, -50, -50, -40, -40, -30,
-    -20, -30, -30, -40, -40, -30, -30, -20,
-    -10, -20, -20, -20, -20, -20, -20, -10,
-     20,  20,   0,   0,   0,   0,  20,  20,
-     20,  30,  10,   0,   0,  10,  30,  20,
-]
-
-_KING_EG = [
-    -50, -40, -30, -20, -20, -30, -40, -50,
-    -30, -20, -10,   0,   0, -10, -20, -30,
-    -30, -10,  20,  30,  30,  20, -10, -30,
-    -30, -10,  30,  40,  40,  30, -10, -30,
-    -30, -10,  30,  40,  40,  30, -10, -30,
-    -30, -10,  20,  30,  30,  20, -10, -30,
-    -30, -30,   0,   0,   0,   0, -30, -30,
-    -50, -30, -30, -30, -30, -30, -30, -50,
-]
-
-_MG_TABLES = {
-    chess.PAWN: _PAWN_MG,
-    chess.KNIGHT: _KNIGHT,
-    chess.BISHOP: _BISHOP,
-    chess.ROOK: _ROOK,
-    chess.QUEEN: _QUEEN,
-    chess.KING: _KING_MG,
-}
-
-_EG_TABLES = {
-    chess.PAWN: _PAWN_EG,
-    chess.KNIGHT: _KNIGHT,
-    chess.BISHOP: _BISHOP,
-    chess.ROOK: _ROOK,
-    chess.QUEEN: _QUEEN,
-    chess.KING: _KING_EG,
-}
-
-
-def _bake(tables, values):
-    """Fold piece value + PST into per-color lookup arrays indexed by square."""
-    baked = {}
-    for piece_type, table in tables.items():
-        white = [0] * 64
-        black = [0] * 64
-        for sq in chess.SQUARES:
-            white[sq] = values[piece_type] + table[chess.square_mirror(sq)]
-            black[sq] = values[piece_type] + table[sq]
-        baked[piece_type] = (black, white)  # indexed by color: False=black, True=white
-    return baked
-
-
-PST_MG = _bake(_MG_TABLES, PIECE_VALUES_MG)
-PST_EG = _bake(_EG_TABLES, PIECE_VALUES_EG)
-
-# Game phase weights (PeSTO): total 24 at the starting position.
-_PHASE_WEIGHT = {
-    chess.PAWN: 0,
-    chess.KNIGHT: 1,
-    chess.BISHOP: 1,
-    chess.ROOK: 2,
-    chess.QUEEN: 4,
-    chess.KING: 0,
-}
-MAX_PHASE = 24
-
-# Masks of squares an enemy pawn would have to occupy to stop a passed pawn.
-_PASSED_MASKS = {chess.WHITE: [0] * 64, chess.BLACK: [0] * 64}
-# Pawn-shield squares in front of a castled king.
-_SHIELD_MASKS = {chess.WHITE: [0] * 64, chess.BLACK: [0] * 64}
-
-for _sq in chess.SQUARES:
-    _f, _r = chess.square_file(_sq), chess.square_rank(_sq)
-    w_pass = b_pass = w_shield = b_shield = 0
-    for df in (-1, 0, 1):
-        nf = _f + df
-        if not 0 <= nf <= 7:
-            continue
-        for nr in range(_r + 1, 8):
-            w_pass |= chess.BB_SQUARES[chess.square(nf, nr)]
-        for nr in range(0, _r):
-            b_pass |= chess.BB_SQUARES[chess.square(nf, nr)]
-        if _r + 1 <= 7:
-            w_shield |= chess.BB_SQUARES[chess.square(nf, _r + 1)]
-        if _r + 2 <= 7:
-            w_shield |= chess.BB_SQUARES[chess.square(nf, _r + 2)]
-        if _r - 1 >= 0:
-            b_shield |= chess.BB_SQUARES[chess.square(nf, _r - 1)]
-        if _r - 2 >= 0:
-            b_shield |= chess.BB_SQUARES[chess.square(nf, _r - 2)]
-    _PASSED_MASKS[chess.WHITE][_sq] = w_pass
-    _PASSED_MASKS[chess.BLACK][_sq] = b_pass
-    _SHIELD_MASKS[chess.WHITE][_sq] = w_shield
-    _SHIELD_MASKS[chess.BLACK][_sq] = b_shield
-
-_FILE_BBS = [chess.BB_FILES[f] for f in range(8)]
-
-BISHOP_PAIR_BONUS = 30
-DOUBLED_PAWN_PENALTY = 15
-ISOLATED_PAWN_PENALTY = 12
-PASSED_PAWN_BONUS = (0, 10, 15, 25, 40, 65, 100, 0)  # by rank progress
-ROOK_OPEN_FILE_BONUS = 22
-ROOK_SEMI_OPEN_BONUS = 10
-KING_SHIELD_BONUS = 8
-TEMPO_BONUS = 10
-
 MATE_SCORE = 100_000
+
+# Tables are written from White's side with a8 first (index 0 = a8, 63 = h1).
+_MG_PAWN = (
+       0,    0,    0,    0,    0,    0,    0,    0,
+      98,  134,   61,   95,   68,  126,   34,  -11,
+      -6,    7,   26,   31,   65,   56,   25,  -20,
+     -14,   13,    6,   21,   23,   12,   17,  -23,
+     -27,   -2,   -5,   12,   17,    6,   10,  -25,
+     -26,   -4,   -4,  -10,    3,    3,   33,  -12,
+     -35,   -1,  -20,  -23,  -15,   24,   38,  -22,
+       0,    0,    0,    0,    0,    0,    0,    0,
+)
+
+_MG_KNIGHT = (
+    -167,  -89,  -34,  -49,   61,  -97,  -15, -107,
+     -73,  -41,   72,   36,   23,   62,    7,  -17,
+     -47,   60,   37,   65,   84,  129,   73,   44,
+      -9,   17,   19,   53,   37,   69,   18,   22,
+     -13,    4,   16,   13,   28,   19,   21,   -8,
+     -23,   -9,   12,   10,   19,   17,   25,  -16,
+     -29,  -53,  -12,   -3,   -1,   18,  -14,  -19,
+    -105,  -21,  -58,  -33,  -17,  -28,  -19,  -23,
+)
+
+_MG_BISHOP = (
+     -29,    4,  -82,  -37,  -25,  -42,    7,   -8,
+     -26,   16,  -18,  -13,   30,   59,   18,  -47,
+     -16,   37,   43,   40,   35,   50,   37,   -2,
+      -4,    5,   19,   50,   37,   37,    7,   -2,
+      -6,   13,   13,   26,   34,   12,   10,    4,
+       0,   15,   15,   15,   14,   27,   18,   10,
+       4,   15,   16,    0,    7,   21,   33,    1,
+     -33,   -3,  -14,  -21,  -13,  -12,  -39,  -21,
+)
+
+_MG_ROOK = (
+      32,   42,   32,   51,   63,    9,   31,   43,
+      27,   32,   58,   62,   80,   67,   26,   44,
+      -5,   19,   26,   36,   17,   45,   61,   16,
+     -24,  -11,    7,   26,   24,   35,   -8,  -20,
+     -36,  -26,  -12,   -1,    9,   -7,    6,  -23,
+     -45,  -25,  -16,  -17,    3,    0,   -5,  -33,
+     -44,  -16,  -20,   -9,   -1,   11,   -6,  -71,
+     -19,  -13,    1,   17,   16,    7,  -37,  -26,
+)
+
+_MG_QUEEN = (
+     -28,    0,   29,   12,   59,   44,   43,   45,
+     -24,  -39,   -5,    1,  -16,   57,   28,   54,
+     -13,  -17,    7,    8,   29,   56,   47,   57,
+     -27,  -27,  -16,  -16,   -1,   17,   -2,    1,
+      -9,  -26,   -9,  -10,   -2,   -4,    3,   -3,
+     -14,    2,  -11,   -2,   -5,    2,   14,    5,
+     -35,   -8,   11,    2,    8,   15,   -3,    1,
+      -1,  -18,   -9,   10,  -15,  -25,  -31,  -50,
+)
+
+_MG_KING = (
+     -65,   23,   16,  -15,  -56,  -34,    2,   13,
+      29,   -1,  -20,   -7,   -8,   -4,  -38,  -29,
+      -9,   24,    2,  -16,  -20,    6,   22,  -22,
+     -17,  -20,  -12,  -27,  -30,  -25,  -14,  -36,
+     -49,   -1,  -27,  -39,  -46,  -44,  -33,  -51,
+     -14,  -14,  -22,  -46,  -44,  -30,  -15,  -27,
+       1,    7,   -8,  -64,  -43,  -16,    9,    8,
+     -15,   36,   12,  -54,    8,  -28,   24,   14,
+)
+
+_EG_PAWN = (
+       0,    0,    0,    0,    0,    0,    0,    0,
+     178,  173,  158,  134,  147,  132,  165,  187,
+      94,  100,   85,   67,   56,   53,   82,   84,
+      32,   24,   13,    5,   -2,    4,   17,   17,
+      13,    9,   -3,   -7,   -7,   -8,    3,   -1,
+       4,    7,   -6,    1,    0,   -5,   -1,   -8,
+      13,    8,    8,   10,   13,    0,    2,   -7,
+       0,    0,    0,    0,    0,    0,    0,    0,
+)
+
+_EG_KNIGHT = (
+     -58,  -38,  -13,  -28,  -31,  -27,  -63,  -99,
+     -25,   -8,  -25,   -2,   -9,  -25,  -24,  -52,
+     -24,  -20,   10,    9,   -1,   -9,  -19,  -41,
+     -17,    3,   22,   22,   22,   11,    8,  -18,
+     -18,   -6,   16,   25,   16,   17,    4,  -18,
+     -23,   -3,   -1,   15,   10,   -3,  -20,  -22,
+     -42,  -20,  -10,   -5,   -2,  -20,  -23,  -44,
+     -29,  -51,  -23,  -15,  -22,  -18,  -50,  -64,
+)
+
+_EG_BISHOP = (
+     -14,  -21,  -11,   -8,   -7,   -9,  -17,  -24,
+      -8,   -4,    7,  -12,   -3,  -13,   -4,  -14,
+       2,   -8,    0,   -1,   -2,    6,    0,    4,
+      -3,    9,   12,    9,   14,   10,    3,    2,
+      -6,    3,   13,   19,    7,   10,   -3,   -9,
+     -12,   -3,    8,   10,   13,    3,   -7,  -15,
+     -14,  -18,   -7,   -1,    4,   -9,  -15,  -27,
+     -23,   -9,  -23,   -5,   -9,  -16,   -5,  -17,
+)
+
+_EG_ROOK = (
+      13,   10,   18,   15,   12,   12,    8,    5,
+      11,   13,   13,   11,   -3,    3,    8,    3,
+       7,    7,    7,    5,    4,   -3,   -5,   -3,
+       4,    3,   13,    1,    2,    1,   -1,    2,
+       3,    5,    8,    4,   -5,   -6,   -8,  -11,
+      -4,    0,   -5,   -1,   -7,  -12,   -8,  -16,
+      -6,   -6,    0,    2,   -9,   -9,  -11,   -3,
+      -9,    2,    3,   -1,   -5,  -13,    4,  -20,
+)
+
+_EG_QUEEN = (
+      -9,   22,   22,   27,   27,   19,   10,   20,
+     -17,   20,   32,   41,   58,   25,   30,    0,
+     -20,    6,    9,   49,   47,   35,   19,    9,
+       3,   22,   24,   45,   57,   40,   57,   36,
+     -18,   28,   19,   47,   31,   34,   39,   23,
+     -16,  -27,   15,    6,    9,   17,   10,    5,
+     -22,  -23,  -30,  -16,  -16,  -23,  -36,  -32,
+     -33,  -28,  -22,  -43,   -5,  -32,  -20,  -41,
+)
+
+_EG_KING = (
+     -74,  -35,  -18,  -18,  -11,   15,    4,  -17,
+     -12,   17,   14,   17,   17,   38,   23,   11,
+      10,   17,   23,   15,   20,   45,   44,   13,
+      -8,   22,   24,   27,   26,   33,   26,    3,
+     -18,   -4,   21,   24,   27,   23,    9,  -11,
+     -19,   -3,   11,   21,   23,   16,    7,   -9,
+     -27,  -11,    4,   13,   14,    4,   -5,  -17,
+     -53,  -34,  -21,  -11,  -28,  -14,  -24,  -43,
+)
+_VALUE_MG = {chess.PAWN: 82, chess.KNIGHT: 337, chess.BISHOP: 365,
+             chess.ROOK: 477, chess.QUEEN: 1025, chess.KING: 0}
+_VALUE_EG = {chess.PAWN: 94, chess.KNIGHT: 281, chess.BISHOP: 297,
+             chess.ROOK: 512, chess.QUEEN: 936, chess.KING: 0}
+
+#: Rough piece values for move ordering and exchange evaluation.
+PIECE_VALUE = (0, 100, 320, 330, 500, 950, 20_000)
+
+MAX_PHASE = 24  # knights/bishops 1, rooks 2, queens 4
+
+
+def S(mg: int, eg: int) -> int:
+    """Pack a (middlegame, endgame) pair into one int so both sum in one add."""
+    return (mg << 16) + eg
+
+
+def _unpack(packed: int):
+    eg = ((packed + 0x8000) & 0xFFFF) - 0x8000
+    return (packed - eg) >> 16, eg
+
+
+def _bake(mg_table, eg_table, piece_type):
+    """Per-colour lookup lists indexed by python-chess square (a1 = 0)."""
+    white = [0] * 64
+    black = [0] * 64
+    for sq in range(64):
+        white[sq] = S(_VALUE_MG[piece_type] + mg_table[sq ^ 56],
+                      _VALUE_EG[piece_type] + eg_table[sq ^ 56])
+        black[sq] = S(_VALUE_MG[piece_type] + mg_table[sq],
+                      _VALUE_EG[piece_type] + eg_table[sq])
+    return black, white  # indexed by colour: False = Black, True = White
+
+
+_PAWN_PST = _bake(_MG_PAWN, _EG_PAWN, chess.PAWN)
+_KNIGHT_PST = _bake(_MG_KNIGHT, _EG_KNIGHT, chess.KNIGHT)
+_BISHOP_PST = _bake(_MG_BISHOP, _EG_BISHOP, chess.BISHOP)
+_ROOK_PST = _bake(_MG_ROOK, _EG_ROOK, chess.ROOK)
+_QUEEN_PST = _bake(_MG_QUEEN, _EG_QUEEN, chess.QUEEN)
+_KING_PST = _bake(_MG_KING, _EG_KING, chess.KING)
+
+# ------------------------------------------------------------------ weights
+
+BISHOP_PAIR = S(25, 45)
+DOUBLED_PAWN = S(-8, -18)
+ISOLATED_PAWN = S(-10, -12)
+PASSED_PAWN = (0, S(0, 5), S(0, 10), S(5, 20), S(15, 35), S(30, 60), S(50, 90), 0)  # by rank reached
+PROTECTED_PASSER = S(8, 12)
+ROOK_OPEN_FILE = S(22, 10)
+ROOK_SEMI_OPEN_FILE = S(11, 5)
+TEMPO = 12
+
+# Mobility: bonus per reachable square relative to a typical count.
+_KNIGHT_MOB = [S(4 * (n - 4), 4 * (n - 4)) for n in range(9)]
+_BISHOP_MOB = [S(4 * (n - 6), 4 * (n - 6)) for n in range(14)]
+_ROOK_MOB = [S(2 * (n - 7), 4 * (n - 7)) for n in range(15)]
+_QUEEN_MOB = [S(n - 14, 2 * (n - 14)) for n in range(28)]
+
+# King safety (middlegame only).
+SHIELD_NEAR = 12          # pawn directly in front of the castled king
+SHIELD_FAR = 6            # pawn two ranks in front
+KING_OPEN_FILE = 14       # no friendly pawn on a file next to the king
+_ATTACK_WEIGHT_KNIGHT = 2
+_ATTACK_WEIGHT_BISHOP = 2
+_ATTACK_WEIGHT_ROOK = 3
+_ATTACK_WEIGHT_QUEEN = 5
+# Penalty by total attack weight, applied once at least two pieces attack.
+_KING_DANGER = [min(n * n, 400) for n in range(64)]
+
+# ------------------------------------------------------------- bitboard masks
+
+_BB_SQUARES = chess.BB_SQUARES
+_KNIGHT_ATTACKS = chess.BB_KNIGHT_ATTACKS
+_KING_ATTACKS = chess.BB_KING_ATTACKS
+_DIAG_MASKS, _DIAG_ATTACKS = chess.BB_DIAG_MASKS, chess.BB_DIAG_ATTACKS
+_FILE_MASKS, _FILE_ATTACKS = chess.BB_FILE_MASKS, chess.BB_FILE_ATTACKS
+_RANK_MASKS, _RANK_ATTACKS = chess.BB_RANK_MASKS, chess.BB_RANK_ATTACKS
+_NOT_FILE_A = ~chess.BB_FILE_A & chess.BB_ALL
+_NOT_FILE_H = ~chess.BB_FILE_H & chess.BB_ALL
+_LIGHT = chess.BB_LIGHT_SQUARES
+_DARK = chess.BB_DARK_SQUARES
+
+_FILES = chess.BB_FILES
+_FILE_OF = [chess.BB_FILES[sq & 7] for sq in range(64)]
+_ADJACENT_FILES = [0] * 64
+#: Squares an enemy pawn would have to stand on to stop a passed pawn.
+_PASSED_MASK = ([0] * 64, [0] * 64)
+#: King zone: the king's square, its neighbours, and one more rank forward.
+_KING_ZONE = ([0] * 64, [0] * 64)
+_SHIELD_NEAR = ([0] * 64, [0] * 64)
+_SHIELD_FAR = ([0] * 64, [0] * 64)
+_KING_FILES = [0] * 64
+#: Distance of a square from the centre (0..6) - drives the mop-up term.
+_CENTRE_DISTANCE = [0] * 64
+
+for _sq in range(64):
+    _f, _r = _sq & 7, _sq >> 3
+    _adj = 0
+    if _f > 0:
+        _adj |= chess.BB_FILES[_f - 1]
+    if _f < 7:
+        _adj |= chess.BB_FILES[_f + 1]
+    _ADJACENT_FILES[_sq] = _adj
+    _span = _adj | chess.BB_FILES[_f]
+    _KING_FILES[_sq] = _span
+    _ahead_w = _ahead_b = 0
+    for _rr in range(_r + 1, 8):
+        _ahead_w |= chess.BB_RANKS[_rr]
+    for _rr in range(0, _r):
+        _ahead_b |= chess.BB_RANKS[_rr]
+    _PASSED_MASK[chess.WHITE][_sq] = _span & _ahead_w
+    _PASSED_MASK[chess.BLACK][_sq] = _span & _ahead_b
+    _ring = _KING_ATTACKS[_sq] | _BB_SQUARES[_sq]
+    _KING_ZONE[chess.WHITE][_sq] = (_ring | (_ring << 8)) & chess.BB_ALL
+    _KING_ZONE[chess.BLACK][_sq] = _ring | (_ring >> 8)
+    _SHIELD_NEAR[chess.WHITE][_sq] = _span & chess.BB_RANKS[_r + 1] if _r < 7 else 0
+    _SHIELD_FAR[chess.WHITE][_sq] = _span & chess.BB_RANKS[_r + 2] if _r < 6 else 0
+    _SHIELD_NEAR[chess.BLACK][_sq] = _span & chess.BB_RANKS[_r - 1] if _r > 0 else 0
+    _SHIELD_FAR[chess.BLACK][_sq] = _span & chess.BB_RANKS[_r - 2] if _r > 1 else 0
+    _CENTRE_DISTANCE[_sq] = max(3 - _f, _f - 4) + max(3 - _r, _r - 4)
+
+_BACK_RANKS = (chess.BB_RANK_8 | chess.BB_RANK_7, chess.BB_RANK_1 | chess.BB_RANK_2)
+
+# ----------------------------------------------------------------- pawn cache
+
+_pawn_cache = {}
+_PAWN_CACHE_MAX = 60_000
+
+
+def _pawn_entry(wp: int, bp: int):
+    """(packed score, white pawn attacks, black pawn attacks) for a pawn skeleton."""
+    w_attacks = ((wp << 7) & _NOT_FILE_H) | ((wp << 9) & _NOT_FILE_A)
+    b_attacks = ((bp >> 7) & _NOT_FILE_A) | ((bp >> 9) & _NOT_FILE_H)
+    score = 0
+
+    pst = _PAWN_PST[chess.WHITE]
+    passed_mask = _PASSED_MASK[chess.WHITE]
+    bb = wp
+    while bb:
+        lsb = bb & -bb
+        sq = lsb.bit_length() - 1
+        bb ^= lsb
+        score += pst[sq]
+        file_bb = _FILE_OF[sq]
+        if wp & file_bb & ~lsb & passed_mask[sq]:
+            score += DOUBLED_PAWN            # a friendly pawn ahead on the file
+        if not wp & _ADJACENT_FILES[sq]:
+            score += ISOLATED_PAWN
+        if not bp & passed_mask[sq]:
+            score += PASSED_PAWN[sq >> 3]
+            if w_attacks & lsb:
+                score += PROTECTED_PASSER
+
+    pst = _PAWN_PST[chess.BLACK]
+    passed_mask = _PASSED_MASK[chess.BLACK]
+    bb = bp
+    while bb:
+        lsb = bb & -bb
+        sq = lsb.bit_length() - 1
+        bb ^= lsb
+        score -= pst[sq]
+        file_bb = _FILE_OF[sq]
+        if bp & file_bb & ~lsb & passed_mask[sq]:
+            score -= DOUBLED_PAWN
+        if not bp & _ADJACENT_FILES[sq]:
+            score -= ISOLATED_PAWN
+        if not wp & passed_mask[sq]:
+            score -= PASSED_PAWN[7 - (sq >> 3)]
+            if b_attacks & lsb:
+                score -= PROTECTED_PASSER
+
+    if len(_pawn_cache) >= _PAWN_CACHE_MAX:
+        _pawn_cache.clear()
+    entry = (score, w_attacks, b_attacks)
+    _pawn_cache[(wp, bp)] = entry
+    return entry
+
+
+# ----------------------------------------------------------------- evaluation
+
+def _pieces(color, own, occupied, knights, bishops, rooks, queens,
+            own_pawns, enemy_pawns, enemy_pawn_attacks, enemy_king_zone):
+    """Score one side's knights, bishops, rooks and queens.
+
+    Returns (packed score, phase, king-attacker count, king-attack weight).
+    """
+    score = 0
+    phase = 0
+    attackers = 0
+    weight = 0
+    not_own = ~own
+    safe = not_own & ~enemy_pawn_attacks  # minors do not count squares pawns cover
+
+    bb = knights & own
+    if bb:
+        pst = _KNIGHT_PST[color]
+        while bb:
+            lsb = bb & -bb
+            sq = lsb.bit_length() - 1
+            bb ^= lsb
+            attacks = _KNIGHT_ATTACKS[sq]
+            score += pst[sq] + _KNIGHT_MOB[(attacks & safe).bit_count()]
+            phase += 1
+            if attacks & enemy_king_zone:
+                attackers += 1
+                weight += _ATTACK_WEIGHT_KNIGHT
+
+    bb = bishops & own
+    if bb:
+        pst = _BISHOP_PST[color]
+        if bb & _LIGHT and bb & _DARK:
+            score += BISHOP_PAIR
+        while bb:
+            lsb = bb & -bb
+            sq = lsb.bit_length() - 1
+            bb ^= lsb
+            attacks = _DIAG_ATTACKS[sq][_DIAG_MASKS[sq] & occupied]
+            score += pst[sq] + _BISHOP_MOB[(attacks & safe).bit_count()]
+            phase += 1
+            if attacks & enemy_king_zone:
+                attackers += 1
+                weight += _ATTACK_WEIGHT_BISHOP
+
+    bb = rooks & own
+    if bb:
+        pst = _ROOK_PST[color]
+        while bb:
+            lsb = bb & -bb
+            sq = lsb.bit_length() - 1
+            bb ^= lsb
+            attacks = (_RANK_ATTACKS[sq][_RANK_MASKS[sq] & occupied]
+                       | _FILE_ATTACKS[sq][_FILE_MASKS[sq] & occupied])
+            score += pst[sq] + _ROOK_MOB[(attacks & not_own).bit_count()]
+            phase += 2
+            file_bb = _FILE_OF[sq]
+            if not own_pawns & file_bb:
+                score += ROOK_SEMI_OPEN_FILE if enemy_pawns & file_bb else ROOK_OPEN_FILE
+            if attacks & enemy_king_zone:
+                attackers += 1
+                weight += _ATTACK_WEIGHT_ROOK
+
+    bb = queens & own
+    if bb:
+        pst = _QUEEN_PST[color]
+        while bb:
+            lsb = bb & -bb
+            sq = lsb.bit_length() - 1
+            bb ^= lsb
+            attacks = (_RANK_ATTACKS[sq][_RANK_MASKS[sq] & occupied]
+                       | _FILE_ATTACKS[sq][_FILE_MASKS[sq] & occupied]
+                       | _DIAG_ATTACKS[sq][_DIAG_MASKS[sq] & occupied])
+            score += pst[sq] + _QUEEN_MOB[(attacks & not_own).bit_count()]
+            phase += 4
+            if attacks & enemy_king_zone:
+                attackers += 1
+                weight += _ATTACK_WEIGHT_QUEEN
+
+    return score, phase, attackers, weight
+
+
+def _king_shelter(color, king_sq, own_pawns) -> int:
+    """Middlegame bonus for the pawns in front of a king on its back ranks."""
+    if not _BB_SQUARES[king_sq] & _BACK_RANKS[color]:
+        return -2 * KING_OPEN_FILE  # the king has wandered up the board
+    bonus = (SHIELD_NEAR * (own_pawns & _SHIELD_NEAR[color][king_sq]).bit_count()
+             + SHIELD_FAR * (own_pawns & _SHIELD_FAR[color][king_sq]).bit_count())
+    # Each of the (up to three) files around the king without a friendly pawn.
+    f = king_sq & 7
+    for file_index in (f - 1, f, f + 1):
+        if 0 <= file_index <= 7 and not own_pawns & _FILES[file_index]:
+            bonus -= KING_OPEN_FILE
+    return bonus
 
 
 def evaluate(board: chess.Board) -> int:
     """Static evaluation in centipawns from White's perspective."""
-    if board.is_insufficient_material():
+    occ_w = board.occupied_co[chess.WHITE]
+    occ_b = board.occupied_co[chess.BLACK]
+    occupied = occ_w | occ_b
+    pawns = board.pawns
+    knights = board.knights
+    bishops = board.bishops
+    rooks = board.rooks
+    queens = board.queens
+    wp = pawns & occ_w
+    bp = pawns & occ_b
+
+    if not (pawns | rooks | queens) and board.is_insufficient_material():
         return 0
 
-    mg = 0
-    eg = 0
-    phase = 0
+    entry = _pawn_cache.get((wp, bp))
+    if entry is None:
+        entry = _pawn_entry(wp, bp)
+    score, w_pawn_attacks, b_pawn_attacks = entry
 
-    wp_files = 0  # bitmask of files containing white pawns
-    bp_files = 0
-    white_pawns_bb = board.pawns & board.occupied_co[chess.WHITE]
-    black_pawns_bb = board.pawns & board.occupied_co[chess.BLACK]
-    white_bishops = 0
-    black_bishops = 0
+    kings = board.kings
+    wk = (kings & occ_w).bit_length() - 1
+    bk = (kings & occ_b).bit_length() - 1
+    score += _KING_PST[chess.WHITE][wk] - _KING_PST[chess.BLACK][bk]
 
-    for sq, piece in board.piece_map().items():
-        pt = piece.piece_type
-        color = piece.color
-        sign = 1 if color else -1
-        mg += sign * PST_MG[pt][color][sq]
-        eg += sign * PST_EG[pt][color][sq]
-        phase += _PHASE_WEIGHT[pt]
+    w_score, w_phase, w_attackers, w_weight = _pieces(
+        chess.WHITE, occ_w, occupied, knights, bishops, rooks, queens,
+        wp, bp, b_pawn_attacks, _KING_ZONE[chess.BLACK][bk])
+    b_score, b_phase, b_attackers, b_weight = _pieces(
+        chess.BLACK, occ_b, occupied, knights, bishops, rooks, queens,
+        bp, wp, w_pawn_attacks, _KING_ZONE[chess.WHITE][wk])
+    score += w_score - b_score
+    phase = w_phase + b_phase
 
-        if pt == chess.PAWN:
-            f = chess.square_file(sq)
-            if color:
-                wp_files |= 1 << f
-            else:
-                bp_files |= 1 << f
-            enemy = black_pawns_bb if color else white_pawns_bb
-            if not (_PASSED_MASKS[color][sq] & enemy):
-                progress = chess.square_rank(sq) if color else 7 - chess.square_rank(sq)
-                bonus = PASSED_PAWN_BONUS[progress]
-                mg += sign * bonus
-                eg += sign * (bonus + bonus // 2)
-        elif pt == chess.BISHOP:
-            if color:
-                white_bishops += 1
-            else:
-                black_bishops += 1
+    mg, eg = _unpack(score)
 
-    if white_bishops >= 2:
-        mg += BISHOP_PAIR_BONUS
-        eg += BISHOP_PAIR_BONUS
-    if black_bishops >= 2:
-        mg -= BISHOP_PAIR_BONUS
-        eg -= BISHOP_PAIR_BONUS
+    # King safety only matters while there is material to attack with.
+    if phase >= 6:
+        safety = _king_shelter(chess.WHITE, wk, wp) - _king_shelter(chess.BLACK, bk, bp)
+        if w_attackers >= 2:
+            danger = _KING_DANGER[w_weight]
+            safety += danger if queens & occ_w else danger // 2
+        if b_attackers >= 2:
+            danger = _KING_DANGER[b_weight]
+            safety -= danger if queens & occ_b else danger // 2
+        mg += safety
 
-    structure = _pawn_structure(white_pawns_bb, black_pawns_bb, wp_files, bp_files)
-    mg += structure
-    eg += structure
+    scale = 16
+    if phase <= 8 and eg:
+        scale, mop_up = _endgame_knowledge(board, eg > 0, wk, bk, w_phase, b_phase, wp, bp, occ_w, occ_b)
+        eg += mop_up
 
-    rooks = _rook_files(board, wp_files, bp_files)
-    mg += rooks
-    eg += rooks
-
-    mg += _king_shield(board, white_pawns_bb, black_pawns_bb)
-
-    phase = min(phase, MAX_PHASE)
-    score = (mg * phase + eg * (MAX_PHASE - phase)) // MAX_PHASE
-    score += TEMPO_BONUS if board.turn else -TEMPO_BONUS
-    return score
+    if phase > MAX_PHASE:
+        phase = MAX_PHASE
+    blended = mg * phase + eg * (MAX_PHASE - phase)
+    if scale != 16:
+        blended = blended * scale // 16 if blended >= 0 else -(-blended * scale // 16)
+    # Truncate toward zero so the result is exactly colour-symmetric.
+    result = blended // MAX_PHASE if blended >= 0 else -(-blended // MAX_PHASE)
+    return result + TEMPO if board.turn else result - TEMPO
 
 
-def _pawn_structure(white_pawns_bb, black_pawns_bb, wp_files, bp_files) -> int:
-    score = 0
-    for f in range(8):
-        file_bb = _FILE_BBS[f]
-        w_count = chess.popcount(white_pawns_bb & file_bb)
-        b_count = chess.popcount(black_pawns_bb & file_bb)
-        if w_count > 1:
-            score -= DOUBLED_PAWN_PENALTY * (w_count - 1)
-        if b_count > 1:
-            score += DOUBLED_PAWN_PENALTY * (b_count - 1)
-        neighbors = 0
-        if f > 0:
-            neighbors |= 1 << (f - 1)
-        if f < 7:
-            neighbors |= 1 << (f + 1)
-        if w_count and not (wp_files & neighbors):
-            score -= ISOLATED_PAWN_PENALTY * w_count
-        if b_count and not (bp_files & neighbors):
-            score += ISOLATED_PAWN_PENALTY * b_count
-    return score
+def _endgame_knowledge(board, strong_is_white, wk, bk, w_phase, b_phase, wp, bp, occ_w, occ_b):
+    """Endgame knowledge: endings that cannot be won, and mating a bare king.
 
+    Returns (scale out of 16 for the whole score, endgame bonus from White's side).
+    """
+    if strong_is_white:
+        strong_phase, weak_phase, strong_pawns, weak_king, strong_occ = w_phase, b_phase, wp, bk, occ_w
+    else:
+        strong_phase, weak_phase, strong_pawns, weak_king, strong_occ = b_phase, w_phase, bp, wk, occ_b
 
-def _rook_files(board, wp_files, bp_files) -> int:
-    score = 0
-    for color, sign in ((chess.WHITE, 1), (chess.BLACK, -1)):
-        own_files = wp_files if color else bp_files
-        their_files = bp_files if color else wp_files
-        for sq in board.pieces(chess.ROOK, color):
-            f = 1 << chess.square_file(sq)
-            if not (own_files & f):
-                if not (their_files & f):
-                    score += sign * ROOK_OPEN_FILE_BONUS
-                else:
-                    score += sign * ROOK_SEMI_OPEN_BONUS
-    return score
+    if not strong_pawns:
+        # Without pawns, being up less than a rook is rarely enough to win.
+        if strong_phase - weak_phase < 2:
+            return 2, 0
+        if strong_phase == 2 and not weak_phase and not (board.rooks | board.bishops) & strong_occ:
+            return 1, 0  # two knights cannot force mate
+    elif (not board.knights and not board.rooks and not board.queens
+          and w_phase == 1 and b_phase == 1):
+        bishops = board.bishops
+        if bishops & _LIGHT and bishops & _DARK:
+            return 10, 0  # opposite-coloured bishops
 
-
-def _king_shield(board, white_pawns_bb, black_pawns_bb) -> int:
-    score = 0
-    wk = board.king(chess.WHITE)
-    bk = board.king(chess.BLACK)
-    if wk is not None:
-        score += KING_SHIELD_BONUS * chess.popcount(
-            _SHIELD_MASKS[chess.WHITE][wk] & white_pawns_bb
-        )
-    if bk is not None:
-        score -= KING_SHIELD_BONUS * chess.popcount(
-            _SHIELD_MASKS[chess.BLACK][bk] & black_pawns_bb
-        )
-    return score
+    if weak_phase == 0 and strong_phase >= 2:
+        # Drive the lone king to the edge and bring our own king up.
+        king_distance = abs((wk & 7) - (bk & 7)) + abs((wk >> 3) - (bk >> 3))
+        bonus = 12 * _CENTRE_DISTANCE[weak_king] + 5 * (14 - king_distance)
+        return 16, bonus if strong_is_white else -bonus
+    return 16, 0

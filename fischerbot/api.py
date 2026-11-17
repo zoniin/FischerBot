@@ -15,10 +15,13 @@ from .bot import FischerBot
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
+# time_budget_ms bounds the whole reply (search plus style verification).
+# style_margin_cp caps what a Fischer-like move may cost against the engine's
+# first choice; the style model usually asks for much less.
 DIFFICULTIES = {
     "easy": {"time_budget_ms": 700, "max_depth": 3, "style_margin_cp": 60},
-    "medium": {"time_budget_ms": 2500, "max_depth": 64, "style_margin_cp": 30},
-    "hard": {"time_budget_ms": 6000, "max_depth": 64, "style_margin_cp": 20},
+    "medium": {"time_budget_ms": 2500, "max_depth": 64, "style_margin_cp": 40},
+    "hard": {"time_budget_ms": 6000, "max_depth": 64, "style_margin_cp": 30},
 }
 
 MAX_HISTORY = 1024  # longest legal chess games are far below this
@@ -150,6 +153,8 @@ def create_app() -> Flask:
             payload["nodes"] = choice.nodes
             payload["time_ms"] = choice.time_ms
             payload["pv"] = choice.pv
+        if choice.engine_san:
+            payload["engine_move_san"] = choice.engine_san  # what the style choice replaced
         return jsonify(payload)
 
     @app.errorhandler(404)

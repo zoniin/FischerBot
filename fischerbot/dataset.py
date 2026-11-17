@@ -1,6 +1,6 @@
 """Loading of the real Fischer game corpus.
 
-Two sources ship with the repo (see data/):
+Two sources ship with the repo (see data/README.md for provenance):
   - m60mg.pgn   — the 60 games of "My 60 Memorable Games"
   - wc1972.pgn  — all 21 games of the 1972 World Championship vs Spassky
 
@@ -46,11 +46,34 @@ class FischerGame:
                 else f"Spassky–Fischer, World Championship 1972, Game {self.number}"
         first = "Fischer" if self.fischer_color == chess.WHITE else opponent
         second = opponent if self.fischer_color == chess.WHITE else "Fischer"
-        site = self.site.split(",")[0].strip() if self.site and self.site != "?" else ""
-        if "http" in site or "/" in site:
-            site = ""  # some PGN sources put URLs in the Site header
-        where = f", {site}" if site else ""
+        where = _pretty_event(self.event)
+        where = f", {where}" if where else ""
         return f"{first}–{second}{where} {year} (My 60 Memorable Games, #{self.number})"
+
+    @property
+    def fischer_score(self) -> float:
+        """1.0 if Fischer won, 0.5 for a draw, 0.0 for a loss."""
+        return fischer_result_score(self)
+
+
+_LOWERCASE_WORDS = {"del", "de", "la"}
+_UPPERCASE_WORDS = {"usa": "USA", "u.s.a.": "USA"}
+
+
+def _pretty_event(event: str) -> str:
+    """'CANDIDATES’ TOURNAMENT' -> "Candidates' Tournament" (the M60MG headers are upper-case)."""
+    if not event or event == "?":
+        return ""
+    words = []
+    for word in event.replace("’", "'").split():
+        lower = word.lower()
+        if lower in _UPPERCASE_WORDS:
+            words.append(_UPPERCASE_WORDS[lower])
+        elif lower in _LOWERCASE_WORDS and words:
+            words.append(lower)
+        else:
+            words.append(word.capitalize())
+    return " ".join(words)
 
 
 def _read_pgn(path: Path, source: str) -> List[FischerGame]:
@@ -107,9 +130,9 @@ def load_corpus() -> List[FischerGame]:
 
 
 def fischer_result_score(fg: FischerGame) -> float:
-    """1.0 if Fischer won the game, 0.5 for a draw or unrecorded result, 0.0 loss."""
+    """1.0 if Fischer won the game, 0.5 for a draw (or unknown result), 0.0 for a loss."""
     if fg.result == "1-0":
         return 1.0 if fg.fischer_color == chess.WHITE else 0.0
     if fg.result == "0-1":
         return 1.0 if fg.fischer_color == chess.BLACK else 0.0
-    return 0.5  # draws and "*" (some M60MG headers lack a recorded result)
+    return 0.5
