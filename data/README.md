@@ -1,19 +1,24 @@
 # The corpus
 
-Everything FischerBot knows about Fischer comes from the 80 games in this
-directory. Nothing else is used to build the opening book or to train the
-style model.
+Everything FischerBot knows about Fischer comes from the 731 games in this
+directory: the opening book is built from them and the style model is trained
+on them.
 
 | File | Games | What |
 | --- | --- | --- |
 | `m60mg.pgn` | 60 | *My 60 Memorable Games* (1957–1967), with the book's side variations |
 | `wc1972.pgn` | 21 | The 1972 World Championship match against Spassky |
-| `engine_candidates.json.gz` | — | Derived: the engine's analysis of every Fischer decision (see below) |
+| `career.pgn` | 651 | His other serious tournament and match games, 1955–1992 |
+| `engine_candidates.json.gz` | — | Derived: the engine's analysis of Fischer's decisions (see below) |
 
 Game 2 of the match was a forfeit (Fischer did not appear), so 20 of the 21
-match games carry moves. Fischer's record across the corpus: **+55 =20 −5**
+match games carry moves. Fischer's record across the corpus: **+407 =241 −83**
 (48 wins, 9 draws, 3 losses in the book; 7 wins, 11 draws, 2 losses played
-in the match).
+in the match; +352 =221 −78 in the rest).
+
+The first two files are the "core": the project started from those 80 games
+(`load_corpus(CORE_SOURCES)`), and they are the ones cited first when a book
+move occurs in several games.
 
 ## Where the games came from
 
@@ -21,6 +26,13 @@ in the match).
   ["All Variations of My 60 Memorable Games"](https://lichess.org/study/4zOTO2ki)
   — each game's `Site` header links to its chapter.
 * `wc1972.pgn` is the PGN Mentor file for the match.
+* `career.pgn` is built by `tools/build_career.py` from PGN Mentor's
+  collection of Fischer's games (827 games, 1955–1992). Kept: tournament and
+  match play. Dropped: 95 blitz, simultaneous-display, casual and
+  against-computer games, 2 forfeits, and the 79 games already in the two
+  files above (matched by players, year and the positions reached, since the
+  book and the database differ here and there in move order). Every game is
+  re-parsed and must be fully legal.
 
 ## Corrections made to the study export
 

@@ -5,9 +5,9 @@ import time
 import chess
 import pytest
 
-from fischerbot.book import OpeningBook
+from fischerbot.book import BOOK_PATH, OpeningBook, recency
 from fischerbot.bot import FischerBot
-from fischerbot.dataset import load_corpus
+from fischerbot.dataset import CORE_SOURCES, load_corpus
 from fischerbot.style import (
     ENGINE_BEST, ENGINE_LOSS, GLOBAL_FEATURES, N_FEATURES, N_PHASE, PHASE_FEATURES,
     PositionContext, StyleModel, feature_names, game_phase, move_features,
@@ -38,8 +38,15 @@ class TestCorpus:
     def test_counts(self, corpus):
         m60 = [g for g in corpus if g.source == "m60mg"]
         wc = [g for g in corpus if g.source == "wc1972"]
+        career = [g for g in corpus if g.source == "career"]
         assert len(m60) == 60
         assert len(wc) == 20  # 21 rounds minus the game-2 forfeit
+        assert len(career) == 651
+        assert len(corpus) == 731
+        assert len(load_corpus(CORE_SOURCES)) == 80
+        assert len({g.key for g in corpus}) == 731, "every game has its own key"
+        with pytest.raises(ValueError):
+            load_corpus(["blitz"])
 
     def test_every_move_of_every_game_is_legal(self, corpus):
         for fg in corpus:
@@ -57,6 +64,47 @@ class TestCorpus:
         assert record(g for g in corpus if g.source == "m60mg") == (48, 9, 3)
         # Reykjavik 1972, games actually played: +7 =11 -2 (12.5-8.5 with the forfeit).
         assert record(g for g in corpus if g.source == "wc1972") == (7, 11, 2)
+        # The rest of his serious games, 1955-1992.
+        assert record(g for g in corpus if g.source == "career") == (352, 221, 78)
+
+    def test_career_games_do_not_repeat_the_core_games(self, corpus):
+        """career.pgn holds only games that are not already in the two core files."""
+        def positions(fg):
+            board = fg.game.board()
+            seen = set()
+            for move in fg.game.mainline_moves():
+                board.push(move)
+                seen.add(board.epd())
+            return seen
+        core = [(g.year, g.fischer_color, positions(g)) for g in corpus if g.source != "career"]
+        years = {year for year, _, _ in core}
+        repeats = []
+        for fg in corpus:
+            if fg.source != "career" or fg.year not in years:
+                continue
+            mine = positions(fg)
+            for year, color, theirs in core:
+                # Two scores of one game share nearly every position; two games
+                # that follow the same opening share a third at most.
+                if year == fg.year and color == fg.fischer_color \
+                        and len(mine & theirs) / min(len(mine), len(theirs)) >= 0.8:
+                    repeats.append(fg.citation)
+        assert not repeats
+
+    def test_career_games_span_his_whole_career(self, corpus):
+        career = [g for g in corpus if g.source == "career"]
+        assert min(g.year for g in career) == 1955 and max(g.year for g in career) == 1992
+        assert not [g.event for g in career if "blitz" in g.event.lower() or " sim" in g.event.lower()]
+        taimanov = [g for g in career if g.opponent == "Taimanov" and g.year == 1971]
+        assert len(taimanov) == 6 and all(g.fischer_score == 1.0 for g in taimanov)   # the 6-0 match
+        assert taimanov[0].citation.endswith("Candidates quarter-final 1971")
+        # The Game of the Century: D. Byrne-Fischer, New York 1956, 17...Be6!!
+        century = next(g for g in career if g.opponent == "D. Byrne" and g.year == 1956 and g.fischer_score == 1.0)
+        board = century.game.board()
+        moves = list(century.game.mainline_moves())
+        for move in moves[:33]:
+            board.push(move)
+        assert board.san(moves[33]) == "Be6"
 
     def test_the_three_losses_in_the_book(self, corpus):
         lost = sorted(g.number for g in corpus if g.source == "m60mg" and g.fischer_score == 0.0)
@@ -121,8 +169,12 @@ class TestBook:
         board = chess.Board()
         moves = book.lookup(board)
         assert moves, "start position must be in the book"
-        assert {m.uci for m in moves} == {"e2e4", "c2c4"}  # his only first moves in the corpus
-        assert moves[0].uci == "e2e4"  # "best by test"
+        # Every first move of his serious career: 1.e4 nearly always, 1.Nf3 as a
+        # boy, 1.c4 in 1970-72, and four games with 1.b3.
+        assert [m.uci for m in moves] == ["e2e4", "g1f3", "c2c4", "b2b3"]
+        assert moves[0].count > 300  # "best by test"
+        core = OpeningBook(load_corpus(CORE_SOURCES))
+        assert {m.uci for m in core.lookup(board)} == {"e2e4", "c2c4"}
 
     def test_ruy_lopez_line(self, book):
         board = chess.Board()
@@ -155,12 +207,70 @@ class TestBook:
         for uci in ["e2e4", "e7e5"]:
             board.push_uci(uci)
         assert book.lookup(board), "as White he faced 1...e5 many times"
-        g1 = game(corpus, "wc1972", 1)  # Fischer was Black: White-to-move positions are absent
+        g1 = game(corpus, "wc1972", 1)  # Fischer was Black: White-to-move positions are not his
         board = g1.game.board()
         moves = list(g1.game.mainline_moves())
         for move in moves[:10]:
             board.push(move)
         assert board.turn == chess.WHITE and not book.lookup(board)
+        # ... but the book does remember what his opponent played there.
+        replies = book.replies(board)
+        assert [m.uci for m in replies] == [moves[10].uci()]
+        assert replies[0].games[0].opponent == "Spassky"
+
+    def test_eras(self, book):
+        """A level set in 1956 knows only the games he had played by then."""
+        board = chess.Board()
+        boy = book.lookup(board, year=1956)
+        assert [m.uci for m in boy] == ["e2e4", "g1f3"]          # no 1.c4 or 1.b3 yet
+        assert all(g.year <= 1956 for m in boy for g in m.games)
+        assert boy[1].count >= 8, "the King's Indian Attack was half his repertoire as a boy"
+        everything = book.lookup(board, year=1972, later=True)
+        assert {m.uci for m in everything} == {"e2e4", "g1f3", "c2c4", "b2b3"}
+        assert max(g.year for m in everything for g in m.games) == 1992
+        # In 1972 the old 1.Nf3 games count for little.
+        nf3 = next(m for m in everything if m.uci == "g1f3")
+        assert nf3.weight < 0.5 * next(m for m in book.lookup(board) if m.uci == "g1f3").weight
+
+    def test_recency(self):
+        assert recency(None, 1956) == 1.0
+        assert recency(1972, 1972) == recency(1972, 1968) == recency(1972, 1992) == 1.0
+        assert recency(1972, 1967) == pytest.approx(0.92)
+        assert recency(1972, 1956) == 0.35
+
+    def test_choose_is_reproducible(self, book):
+        board = chess.Board()
+        moves = book.lookup(board)
+        assert book.choose(board, r=0.0).uci == moves[0].uci
+        assert book.choose(board, r=0.999999).uci == moves[-1].uci
+        assert book.choose(chess.Board("8/8/8/4k3/8/8/8/KR6 w - - 0 1")) is None
+
+    def test_famous_games_are_cited_first(self, book):
+        board = chess.Board()
+        for uci in ["c2c4", "e7e6", "g1f3", "d7d5", "d2d4", "g8f6", "b1c3", "f8e7"]:
+            board.push_uci(uci)
+        best = book.lookup(board)[0]
+        assert best.uci == "c1g5"
+        assert best.citations[0] == "Fischer–Spassky, World Championship 1972, Game 6"
+
+    def test_saved_book_matches_the_games(self, corpus):
+        """web/static/data/book.json must be rebuilt whenever the games or the book change."""
+        tools = pytest.importorskip("tools.build_web_data")
+        assert BOOK_PATH.read_text(encoding="utf-8") == tools.book_document(), \
+            "book.json is stale: run python tools/build_web_data.py"
+
+    def test_book_round_trips_through_json(self, book):
+        loaded = OpeningBook.load()
+        assert loaded.size == book.size and len(loaded.games) == len(book.games)
+        board = chess.Board()
+        for uci in ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6", "b1c3", "a7a6"]:
+            for kwargs in ({}, {"year": 1958}, {"year": 1972, "later": True}):
+                a, b = book.lookup(board, **kwargs), loaded.lookup(board, **kwargs)
+                assert [(m.uci, m.count, m.weight, m.citations) for m in a] == \
+                       [(m.uci, m.count, m.weight, m.citations) for m in b]
+                a, b = book.replies(board, **kwargs), loaded.replies(board, **kwargs)
+                assert [(m.uci, m.count) for m in a] == [(m.uci, m.count) for m in b]
+            board.push_uci(uci)
 
     def test_results_shape_the_weights(self, book):
         board = chess.Board()
@@ -332,10 +442,11 @@ class TestStyleModel:
 
 
 class TestTraining:
-    def test_analysis_cache_covers_every_decision(self, corpus):
+    def test_analysis_cache_covers_every_decision(self):
         train_style = pytest.importorskip("train_style")
         if not train_style.CANDIDATES_PATH.exists():
             pytest.skip("engine analysis cache not built")
+        corpus = load_corpus(CORE_SOURCES)
         positions = train_style.load_candidates()["positions"]
         wanted = train_style.decisions(corpus)
         assert len(wanted) > 3200
@@ -390,7 +501,7 @@ class TestBot:
         bot = FischerBot(time_budget_ms=300, seed=1)
         choice = bot.choose(chess.Board())
         assert choice.source == "book"
-        assert choice.san in ("e4", "c4")
+        assert choice.san in ("e4", "Nf3", "c4", "b3")
         assert "Fischer" in choice.book_citation
 
     def test_out_of_book_it_searches(self):
@@ -493,7 +604,7 @@ class TestApi:
         data = r.get_json()
         assert data["source"] == "book"
         assert "book_citation" in data
-        assert data["bot_move"] in ("e2e4", "c2c4")
+        assert data["bot_move"] in ("e2e4", "g1f3", "c2c4", "b2b3")
 
     def test_search_reply_out_of_book(self, client):
         history = ["a2a3", "e7e5", "h2h3"]  # nothing Fischer ever faced

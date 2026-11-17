@@ -28,7 +28,8 @@ import chess
 
 from .engine import static_exchange
 
-MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "style.json"
+# The browser loads the same file, so it lives with the web assets.
+MODEL_PATH = Path(__file__).resolve().parent.parent / "web" / "static" / "data" / "style.json"
 
 PHASES = ("opening", "middlegame", "endgame")
 OPENING_MOVES = 12  # full moves treated as "the opening"

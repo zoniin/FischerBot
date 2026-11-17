@@ -1,0 +1,6 @@
+{
+  "name": "fischerbot-web",
+  "private": true,
+  "type": "module",
+  "description": "Browser side of FischerBot. No dependencies: tests run with `node --test web/tests/`."
+}

@@ -65,7 +65,7 @@ class FischerBot:
         self.max_depth = max_depth
         self.style_margin_cp = style_margin_cp
         self.engine = Engine()
-        self.book = book if book is not None else (OpeningBook(seed=seed) if use_book else None)
+        self.book = book if book is not None else (OpeningBook.load(seed=seed) if use_book else None)
         self.style = style_model if style_model is not None else (
             StyleModel.load_or_none() if use_style else None
         )
