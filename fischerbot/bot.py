@@ -9,8 +9,9 @@ Move policy:
    the engine's choice. The model was trained with the engine's own verdict
    as a feature, so it knows how many centipawns each stylistic preference
    is worth; the most Fischer-like move is played if a verification search
-   at full depth proves it costs no more than that (and never more than
-   `style_margin_cp`). Style is never allowed to override tactics.
+   at full depth - and then one ply deeper - proves it costs no more than
+   that (and never more than `style_margin_cp`, less in the endgame).
+   Style is never allowed to override tactics.
 
 The whole decision - search and verification together - stays inside the
 time budget, which matters on serverless hosting.
@@ -110,14 +111,21 @@ class FischerBot:
         choice.time_ms = int((time.perf_counter() - start) * 1000)
         return choice
 
+    def style_margin(self, phase: int) -> float:
+        """Hard cap, in centipawns, on what a style choice may cost in this phase of the game."""
+        if phase == 2:
+            return min(self.style_margin_cp, ENDGAME_STYLE_MARGIN_CP)
+        return self.style_margin_cp
+
     def _style_alternative(self, board: chess.Board, result, deadline: float) -> Optional[chess.Move]:
         """The move with the best balance of Fischer-likeness and engine score.
 
         Candidates are the moves the style model prefers to the engine's
         choice. Each is searched at full depth to learn exactly what it
         costs; it wins if its style outweighs that cost by more than any
-        other candidate's does. A move whose cost exceeds what its style is
-        worth - or `style_margin_cp` - is never played.
+        other candidate's does, and is then confirmed one ply deeper. A move
+        whose cost exceeds what its style is worth - or the phase's margin -
+        is never played.
         """
         if self.style is None or result.move is None or result.depth < MIN_STYLE_DEPTH:
             return None
@@ -131,9 +139,10 @@ class FischerBot:
             return None
 
         phase = game_phase(board)
-        margin = min(self.style_margin_cp, ENDGAME_STYLE_MARGIN_CP) if phase == 2 else self.style_margin_cp
+        margin = self.style_margin(phase)
         chosen = None
         chosen_surplus = 0.0     # how far the chosen move is past break-even, in centipawns
+        chosen_floor = 0         # the lowest score the chosen move was allowed to have
         probes = 0
         for move, style in ranked:
             if move == result.move or probes >= MAX_STYLE_PROBES:
@@ -153,5 +162,12 @@ class FischerBot:
                 continue  # costs more than its style is worth (or we ran out of time)
             surplus = allowed - max(0, best_score - score)
             if surplus > chosen_surplus:
-                chosen, chosen_surplus = move, surplus
+                chosen, chosen_surplus, chosen_floor = move, surplus, best_score - limit
+
+        # The engine's own move was the best of everything at this depth; the
+        # style move was only shown to be close. Before deviating, make sure it
+        # still holds up one ply deeper - if not (or if time is up), don't.
+        if chosen is not None and not self.engine.verify_at_least(
+                board, chosen, chosen_floor, result.depth + 1, deadline):
+            return None
         return chosen

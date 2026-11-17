@@ -290,6 +290,17 @@ class TestStyleModel:
         assert model.allowed_loss(1, 1.5) == pytest.approx(20.0)   # (1.5 - 0.5) / 5 pawns
         assert model.allowed_loss(1, 3.0) == pytest.approx(50.0)
 
+    def test_engine_preference_comes_from_the_model_file(self):
+        """A calibration chosen by cross-validation: extra reluctance to leave the engine's move."""
+        weights = [0.0] * N_FEATURES
+        for phase in range(3):
+            weights[phase * N_PHASE + ENGINE_LOSS] = -4.0
+        plain = StyleModel(weights)
+        cautious = StyleModel(weights, {"engine_preference": 0.5})
+        assert plain.allowed_loss(1, 1.0) == pytest.approx(25.0)
+        assert cautious.allowed_loss(1, 1.0) == pytest.approx(12.5)
+        assert cautious.allowed_loss(1, 0.5) < 0
+
     def test_style_scores_cover_all_legal_moves(self):
         model = StyleModel.load_or_none()
         if model is None:
@@ -311,6 +322,7 @@ class TestStyleModel:
         assert meta["cv_style_top1"] >= meta["cv_engine_top1"]
         for phase in range(3):
             assert model.weights[phase * N_PHASE + ENGINE_LOSS] < 0, "losing centipawns must cost"
+        assert model.engine_preference == meta["engine_preference"] > 0
 
     def test_bundled_model_knows_his_openings(self):
         """Out of book the style model should still prefer Fischer's kind of move."""
@@ -429,6 +441,13 @@ class TestBot:
         bot = FischerBot(time_budget_ms=3000, max_depth=5, use_book=False,
                          style_margin_cp=0, style_model=StubStyle(worse[0]))
         assert bot.choose(board).move.uci() != worse[0]
+
+    def test_style_margin_depends_on_the_phase(self):
+        """Endgames punish small inaccuracies, so style gets less room there."""
+        bot = FischerBot(time_budget_ms=100, use_book=False, use_style=False, style_margin_cp=40)
+        assert [bot.style_margin(phase) for phase in range(3)] == [40, 40, 15]
+        strict = FischerBot(time_budget_ms=100, use_book=False, use_style=False, style_margin_cp=10)
+        assert [strict.style_margin(phase) for phase in range(3)] == [10, 10, 10]
 
     def test_whole_reply_stays_inside_the_time_budget(self):
         board = chess.Board(self.QUIET)
