@@ -27,6 +27,7 @@
   var isGameOver = false;
   var gameSeq = 0;        // discards bot replies that arrive after a New Game
   var errorTimer = null;
+  var pendingPromotion = null; // {from, to} while the promotion picker is open
 
   // ---------- rendering ----------
 
@@ -100,14 +101,17 @@
       $panel.addClass('is-book');
       $note.html($('<span>').text('From ' + (data.book_citation || "Fischer's opening repertoire") + '.').html() +
         '<span class="book-source">played from the book</span>');
-    } else if (data.source === 'search+style') {
-      $note.html('Out of the book — searching.' +
-        '<span class="book-source">styled move</span>');
     } else {
+      var lead = 'Out of the book — searching.';
+      if (data.source === 'search+style') {
+        // The style model preferred this move and the search verified it is sound.
+        lead = 'Out of the book — a Fischer-style choice' +
+          (data.engine_move_san ? ', preferred to the engine\u2019s ' + data.engine_move_san : '') + '.';
+      }
       var parts = [];
       if (typeof data.depth === 'number') { parts.push('depth ' + data.depth); }
       if (typeof data.eval_cp === 'number') { parts.push(formatEval(data.eval_cp)); }
-      $note.html('Out of the book — searching.' +
+      $note.html($('<span>').text(lead).html() +
         (parts.length ? '<span class="book-source">' + parts.join(' · ') + '</span>' : ''));
     }
   }
@@ -184,31 +188,79 @@
   // ---------- board events ----------
 
   function onDragStart(source, piece) {
-    if (isThinking || isGameOver || game.game_over()) { return false; }
+    if (isThinking || isGameOver || pendingPromotion || game.game_over()) { return false; }
     if (!isHumansTurn()) { return false; }
     if (piece.charAt(0) !== humanColor) { return false; }
     return true;
   }
 
-  function onDrop(source, target) {
-    var move = game.move({ from: source, to: target, promotion: 'q' }); // always queen
-    if (move === null) { return 'snapback'; }
+  function isPromotion(source, target) {
+    var candidates = game.moves({ square: source, verbose: true });
+    for (var i = 0; i < candidates.length; i += 1) {
+      if (candidates[i].to === target && candidates[i].promotion) { return true; }
+    }
+    return false;
+  }
+
+  function playHumanMove(source, target, promotion) {
+    var move = game.move({ from: source, to: target, promotion: promotion });
+    if (move === null) { return false; }
     var uci = move.from + move.to + (move.promotion || '');
+    history.push(uci);
+    board.position(game.fen());
+    highlightLastMove(uci);
+    renderScoresheet();
+    renderStatus(null);
+    requestBotMove(true);
+    return true;
+  }
+
+  function openPromotion(source, target) {
+    pendingPromotion = { from: source, to: target };
+    var color = humanColor;
+    $('#promotion img').each(function () {
+      $(this).attr('src', '/static/img/pieces/' + color + $(this).data('piece-img') + '.svg');
+    });
+    $('#promotion').prop('hidden', false);
+    $('#promotion .promotion-btn').first().trigger('focus');
+  }
+
+  function closePromotion(piece) {
+    var pending = pendingPromotion;
+    pendingPromotion = null;
+    $('#promotion').prop('hidden', true);
+    if (!pending) { return; }
+    if (!piece || !playHumanMove(pending.from, pending.to, piece)) {
+      board.position(game.fen()); // cancelled: put the pawn back
+    }
+  }
+
+  function onDrop(source, target) {
+    if (isPromotion(source, target)) {
+      openPromotion(source, target); // the move is completed once a piece is chosen
+      return undefined;
+    }
+    var move = game.move({ from: source, to: target });
+    if (move === null) { return 'snapback'; }
+    var uci = move.from + move.to;
     history.push(uci);
     highlightLastMove(uci);
     renderScoresheet();
     renderStatus(null);
     requestBotMove(true);
+    return undefined;
   }
 
   function onSnapEnd() {
-    board.position(game.fen());
+    if (!pendingPromotion) { board.position(game.fen()); }
   }
 
   // ---------- game lifecycle ----------
 
   function newGame() {
     gameSeq += 1;
+    pendingPromotion = null;
+    $('#promotion').prop('hidden', true);
     game = new Chess();
     history = [];
     isGameOver = false;
@@ -234,6 +286,11 @@
       onSnapEnd: onSnapEnd
     });
     $('#new-game').on('click', newGame);
+    $('#promotion .promotion-btn').on('click', function () { closePromotion($(this).data('piece')); });
+    $('#promotion-cancel').on('click', function () { closePromotion(null); });
+    $(document).on('keydown', function (event) {
+      if (event.key === 'Escape' && pendingPromotion) { closePromotion(null); }
+    });
     $('.seg-btn').on('click', function () {
       $('.seg-btn').removeClass('is-active').attr('aria-pressed', 'false');
       $(this).addClass('is-active').attr('aria-pressed', 'true');

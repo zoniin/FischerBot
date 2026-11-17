@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FischerBot â€” Chess in the Style of Bobby Fischer</title>
+  <title>FischerBot &mdash; Chess in the Style of Bobby Fischer</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9816;</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +44,7 @@
 
       <section class="panel" aria-labelledby="status-heading">
         <h2 id="status-heading" class="panel-title">Broadcast</h2>
-        <p id="status" class="status-line">Your move â€” White to play</p>
+        <p id="status" class="status-line">Your move &mdash; White to play</p>
         <p id="check" class="check-flag" hidden>Check</p>
         <p id="thinking" class="thinking"><span class="thinking-dot" aria-hidden="true"></span>FischerBot is thinking&hellip;</p>
         <p id="error" class="error-line" role="alert" aria-live="polite" hidden></p>
@@ -55,6 +55,16 @@
       <div class="board-frame">
         <div id="board" aria-label="Chess board"></div>
         <div id="banner" class="banner" role="status"></div>
+        <div id="promotion" class="promotion" role="dialog" aria-label="Choose a piece to promote to" hidden>
+          <p class="promotion-title">Promote to</p>
+          <div class="promotion-choices">
+            <button type="button" class="promotion-btn" data-piece="q" aria-label="Queen"><img alt="" data-piece-img="Q"></button>
+            <button type="button" class="promotion-btn" data-piece="r" aria-label="Rook"><img alt="" data-piece-img="R"></button>
+            <button type="button" class="promotion-btn" data-piece="b" aria-label="Bishop"><img alt="" data-piece-img="B"></button>
+            <button type="button" class="promotion-btn" data-piece="n" aria-label="Knight"><img alt="" data-piece-img="N"></button>
+          </div>
+          <button type="button" id="promotion-cancel" class="promotion-cancel">Cancel</button>
+        </div>
       </div>
     </div>
 
@@ -74,7 +84,7 @@
   </main>
 
   <footer class="colophon">
-    <p>Alpha&ndash;beta search over an opening book drawn from Fischer&rsquo;s own games, with a style model on top.</p>
+    <p>An opening book of Fischer&rsquo;s own moves, an alpha&ndash;beta search, and a style model trained on his 80 games to choose between sound moves.</p>
   </footer>
 
   <script src="/static/vendor/jquery-3.6.0.min.js"></script>
