@@ -1,16 +1,22 @@
 """The FischerBot: opening book -> engine search -> style selection.
 
 Move policy:
-1. If the position appears in Fischer's real games with him to move,
-   play one of his actual moves (weighted by frequency/results), citing
-   the source game.
-2. Otherwise run the search engine for the best move.
-3. Among root moves the style model likes better than the engine's pick,
-   accept the most Fischer-like one only if a null-window verification
-   proves it loses at most `style_margin_cp` versus the engine move.
-   Style never overrides tactics.
+1. If the position appears in Fischer's real games with him to move, play
+   one of his actual moves (weighted by frequency and results), citing the
+   source game.
+2. Otherwise search for the best move.
+3. Then ask the style model which legal moves look more like Fischer than
+   the engine's choice. The model was trained with the engine's own verdict
+   as a feature, so it knows how many centipawns each stylistic preference
+   is worth; the most Fischer-like move is played if a verification search
+   at full depth proves it costs no more than that (and never more than
+   `style_margin_cp`). Style is never allowed to override tactics.
+
+The whole decision - search and verification together - stays inside the
+time budget, which matters on serverless hosting.
 """
 
+import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -18,10 +24,14 @@ import chess
 
 from .book import OpeningBook
 from .engine import Engine
-from .style import StyleModel
+from .style import StyleModel, game_phase
 
-DEFAULT_STYLE_MARGIN_CP = 30
-MAX_STYLE_CANDIDATES = 4
+DEFAULT_STYLE_MARGIN_CP = 40   # most the bot will ever give up for style
+ENDGAME_STYLE_MARGIN_CP = 15   # endgames punish small inaccuracies: stay closer to the engine
+MAX_STYLE_PROBES = 4           # verification searches per move
+SEARCH_SHARE = 0.9             # of the time budget; the rest is kept for verification
+MIN_STYLE_DEPTH = 3            # a shallower search is too unreliable to deviate from
+STYLE_SCORE_LIMIT = 500        # when winning or losing by this much, just play the best move
 
 
 @dataclass
@@ -35,6 +45,7 @@ class MoveChoice:
     nodes: Optional[int] = None
     time_ms: Optional[int] = None
     pv: List[str] = field(default_factory=list)
+    engine_san: Optional[str] = None  # what the engine preferred, when style chose differently
 
 
 class FischerBot:
@@ -61,6 +72,8 @@ class FischerBot:
     def choose(self, board: chess.Board) -> MoveChoice:
         if board.is_game_over():
             raise ValueError("Game is already over")
+        start = time.perf_counter()
+        deadline = start + self.time_budget_ms / 1000.0
 
         if self.book is not None:
             entry = self.book.choose(board)
@@ -73,7 +86,8 @@ class FischerBot:
                     book_citation=entry.citations[0],
                 )
 
-        result = self.engine.search(board, self.time_budget_ms, self.max_depth)
+        share = SEARCH_SHARE if self.style is not None else 1.0
+        result = self.engine.search(board, int(self.time_budget_ms * share), self.max_depth)
         best = result.move
         choice = MoveChoice(
             move=best,
@@ -82,42 +96,62 @@ class FischerBot:
             eval_cp=result.score_cp,
             depth=result.depth,
             nodes=result.nodes,
-            time_ms=result.time_ms,
             pv=result.pv,
         )
 
-        alternative = self._style_alternative(board, result)
+        alternative = self._style_alternative(board, result, deadline)
         if alternative is not None and alternative != best:
+            choice.engine_san = choice.san
             choice.move = alternative
             choice.san = board.san(alternative)
             choice.source = "search+style"
+            choice.pv = [alternative.uci()]
+        choice.nodes = self.engine.nodes  # search plus verification
+        choice.time_ms = int((time.perf_counter() - start) * 1000)
         return choice
 
-    def _style_alternative(self, board: chess.Board, result) -> Optional[chess.Move]:
-        """Most Fischer-like root move proven within style_margin_cp of best."""
-        if self.style is None or result.move is None or result.depth < 3:
-            return None
-        if abs(result.score_cp) > 300:
-            return None  # in clearly won/lost positions, just play the engine move
+    def _style_alternative(self, board: chess.Board, result, deadline: float) -> Optional[chess.Move]:
+        """The move with the best balance of Fischer-likeness and engine score.
 
-        ranked = self.style.rank_moves(board)
-        best_logit = None
-        for move, _prob in ranked:
-            if move == result.move:
-                best_logit = self.style.logit(board, move)
-                break
-        if best_logit is None:
+        Candidates are the moves the style model prefers to the engine's
+        choice. Each is searched at full depth to learn exactly what it
+        costs; it wins if its style outweighs that cost by more than any
+        other candidate's does. A move whose cost exceeds what its style is
+        worth - or `style_margin_cp` - is never played.
+        """
+        if self.style is None or result.move is None or result.depth < MIN_STYLE_DEPTH:
+            return None
+        best_score = result.score_cp
+        if abs(best_score) >= STYLE_SCORE_LIMIT:
             return None
 
-        threshold = result.score_cp - self.style_margin_cp
-        verify_depth = max(2, result.depth - 2)
-        checked = 0
-        for move, _prob in ranked:
-            if move == result.move:
-                break  # every remaining move is less Fischer-like than the pick
-            if checked >= MAX_STYLE_CANDIDATES:
+        ranked = self.style.style_scores(board)
+        engine_style = next((score for move, score in ranked if move == result.move), None)
+        if engine_style is None:
+            return None
+
+        phase = game_phase(board)
+        margin = min(self.style_margin_cp, ENDGAME_STYLE_MARGIN_CP) if phase == 2 else self.style_margin_cp
+        chosen = None
+        chosen_surplus = 0.0     # how far the chosen move is past break-even, in centipawns
+        probes = 0
+        for move, style in ranked:
+            if move == result.move or probes >= MAX_STYLE_PROBES:
+                break  # everything further down is less Fischer-like than the engine's pick
+            allowed = self.style.allowed_loss(phase, style - engine_style)
+            # Moves come in order of style, so once even a free move could not
+            # beat the current choice, nothing further down can either.
+            if allowed < 0 or allowed <= chosen_surplus:
                 break
-            checked += 1
-            if self.engine.verify_at_least(board, move, threshold, verify_depth):
-                return move
-        return None
+            if time.perf_counter() >= deadline:
+                break
+            probes += 1
+            limit = int(min(allowed, margin))
+            score = self.engine.score_move(board, move, best_score - limit - 1, best_score + 1,
+                                           result.depth, deadline)
+            if score is None or score < best_score - limit:
+                continue  # costs more than its style is worth (or we ran out of time)
+            surplus = allowed - max(0, best_score - score)
+            if surplus > chosen_surplus:
+                chosen, chosen_surplus = move, surplus
+        return chosen
