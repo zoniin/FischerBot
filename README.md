@@ -200,7 +200,7 @@ legality by the tests.
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - python-chess ≥ 1.10, Flask ≥ 2.3 (NumPy ≥ 1.24 and pytest for training and tests)
 
 ## License
