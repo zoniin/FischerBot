@@ -1395,7 +1395,7 @@ function evaluate() {
   if (phase > MAX_PHASE) phase = MAX_PHASE;
   let value = ((mg * phase + eg * (MAX_PHASE - phase)) / MAX_PHASE) | 0;
   if (phase <= 8 && value !== 0) value = endgameAdjust(value, wk, bk);
-  return (stm === 0 ? value : -value) + TEMPO;
+  return (stm === 0 ? value : 0 - value) + TEMPO;
 }
 
 /**
@@ -1557,10 +1557,612 @@ function playGameMove(m) {
 }
 
 // ---------------------------------------------------------------------------
+// Search: scores, limits and the tables an engine remembers between moves
+// ---------------------------------------------------------------------------
+
+const MATE = 100000;                   // mate scores are +-(MATE - plies from the root)
+const MATE_BOUND = MATE - 1000;        // anything beyond this is a forced mate
+const INF = 1000000;
+const NO_EVAL = -32768;                // "no static evaluation": a hash entry without one, a node in check
+// Scores are negated as `0 - x`, never `-x`: in JavaScript -0 is a floating-point
+// value, and one of those in the search would cost V8 its integer arithmetic.
+
+const now = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
+
+let nodes = 0;
+let checkAt = 0;                       // node count at which the limits are looked at next
+let nodeCap = Infinity;
+let deadline = Infinity;
+let mustFinish = false;                // the first iteration ignores the limits
+let stopped = false;                   // set once a limit is hit: every search function then returns at once
+
+/** Called every 1024 nodes or so (and exactly at the node limit): out of time or nodes? */
+function poll() {
+  if (!mustFinish && (nodes >= nodeCap || now() >= deadline)) stopped = true;
+  checkAt = nodes + 1024;
+  if (nodeCap > nodes && nodeCap < checkAt) checkAt = nodeCap;
+}
+
+// Transposition table. A position's key is 64 bits in two halves: the low
+// half picks a bucket of four entries (64 bytes, one cache line), the high
+// half is stored to recognise the position. Entry = four 32-bit words:
+//   [0] key, high half
+//   [1] best move | bound << 29
+//   [2] score (a mate score is stored relative to the entry's own node)
+//   [3] depth | generation << 8 | static evaluation << 16
+const BOUND_UPPER = 1, BOUND_LOWER = 2, BOUND_EXACT = 3;   // exact = both bounds
+const MOVE_MASK = (1 << 29) - 1;
+
+let tt = null;                         // the loaded engine's table (Int32Array)
+let ttMask = 0;                        // number of buckets - 1
+let ttGen = 1;                         // goes up by one each search: entries of older searches go first
+// What the last successful ttProbe() found.
+let hMove = 0, hScore = 0, hEval = 0, hDepth = 0, hBound = 0;
+
+function ttProbe(keyLo, keyHi) {
+  const t = tt;
+  let e = (keyLo & ttMask) << 4;
+  const end = e + 16;
+  for (; e < end; e += 4) {
+    if (t[e] === keyHi) {
+      const w = t[e + 1], x = t[e + 3];
+      hMove = w & MOVE_MASK; hBound = w >>> 29;
+      hScore = t[e + 2];
+      hDepth = x & 255; hEval = x >> 16;
+      return true;
+    }
+  }
+  return false;
+}
+
+function ttStore(keyLo, keyHi, move, score, ev, depth, bound) {
+  const t = tt;
+  const base = (keyLo & ttMask) << 4;
+  let slot = base, worst = INF, x, q;
+  for (let e = base; e < base + 16; e += 4) {
+    x = t[e + 3];
+    if (t[e] === keyHi) {
+      // The same position again. A much deeper result is worth more than a
+      // shallow bound: keep it (and mark it as still in use).
+      if (bound !== BOUND_EXACT && depth + 4 <= (x & 255)) {
+        t[e + 3] = (x & ~0xFF00) | (ttGen << 8);
+        return;
+      }
+      if (move === 0) move = t[e + 1] & MOVE_MASK;   // a search that found no best move keeps the old one
+      slot = e;
+      break;
+    }
+    // Otherwise the least valuable entry goes: shallow, or left over from an earlier search.
+    q = (x & 255) - (((ttGen - (x >> 8)) & 255) << 3);
+    if (q < worst) { worst = q; slot = e; }
+  }
+  t[slot] = keyHi;
+  t[slot + 1] = move | (bound << 29);
+  t[slot + 2] = score;
+  t[slot + 3] = (depth > 255 ? 255 : depth) | (ttGen << 8) | (ev << 16);
+}
+
+// Move-ordering memory. All of it belongs to one engine and is bound to these
+// variables when that engine is loaded.
+const HISTORY_MAX = 16384;
+/** Quiet moves that caused cutoffs, [side << 12 | from << 6 | to] (squares 0..63). */
+let history = null;
+/** The quiet move that last refuted a given move, [piece << 6 | to] of the move it answered. */
+let counterMove = null;
+
+// Per-ply working memory of one search (shared: only one search runs at a time).
+/** Two quiet moves per ply that caused a cutoff in a sibling position. */
+const killers = new Int32Array((MAX_PLY + 2) * 2);
+const evalStack = new Int32Array(MAX_PLY + 2);
+/** Principal variation: row `ply` holds the best line found from that ply on. */
+const pvTable = new Int32Array((MAX_PLY + 2) * MAX_PLY);
+const pvLen = new Int32Array(MAX_PLY + 2);
+/** Quiet moves tried at each ply before the one that caused a cutoff. */
+const triedQuiets = new Int32Array(MAX_PLY * 64);
+
+function updatePv(ply, m) {
+  const base = ply * MAX_PLY, child = base + MAX_PLY;
+  const n = pvLen[ply + 1];
+  pvTable[base] = m;
+  for (let i = 0; i < n; i++) pvTable[base + 1 + i] = pvTable[child + i];
+  pvLen[ply] = n + 1;
+}
+
+function historyIndex(m) {
+  return (((m >> 16) & 16) << 8) | (SQ64[m & 255] << 6) | SQ64[(m >> 8) & 255];
+}
+
+/** Moves a history counter towards +-HISTORY_MAX: the nearer the limit, the smaller the step. */
+function historyAdd(table, i, bonus) {
+  const v = table[i];
+  table[i] = v + bonus - ((v * (bonus < 0 ? -bonus : bonus)) >> 14);
+}
+
+/** A quiet move refuted the position: remember it and mark down the quiet moves tried before it. */
+function rewardQuiet(m, ply, depth, nTried) {
+  const k = ply << 1;
+  if (killers[k] !== m) { killers[k + 1] = killers[k]; killers[k] = m; }
+  const prev = U[sp + F_MOVE];
+  if (prev !== 0) counterMove[(((prev >> 16) & 31) << 6) | SQ64[(prev >> 8) & 255]] = m;
+  let bonus = 16 * depth * depth;
+  if (bonus > 1600) bonus = 1600;
+  historyAdd(history, historyIndex(m), bonus);
+  const base = ply << 6;
+  for (let i = 0; i < nTried; i++) historyAdd(history, historyIndex(triedQuiets[base + i]), -bonus);
+}
+
+/** Has this position been on the board before, in the game or on the way here? */
+function repeated(s, half) {
+  const keyLo = U[s + F_KEYLO], keyHi = U[s + F_KEYHI];
+  // Only positions since the last capture or pawn move (or null move) can come back, and only with the same side to move.
+  let floor = s - half * FR;
+  if (floor < 0) floor = 0;
+  for (let t = s - 4 * FR; t >= floor; t -= 2 * FR) {
+    if (U[t + F_KEYLO] === keyLo && U[t + F_KEYHI] === keyHi) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Search: handing out moves in the order most likely to cut off
+// ---------------------------------------------------------------------------
+//
+// Moves are generated in stages, so that a cutoff by the hash move or by a
+// capture never pays for generating and sorting the quiet moves:
+//   hash move - winning and equal captures, queen promotions - killer moves,
+//   countermove - the other quiet moves by history - losing captures and
+//   under-promotions.
+// In check there are few legal moves: they are generated and sorted at once.
+// The moves handed out are pseudo-legal; the search tests them with isLegal().
+
+const ST_HASH = 0, ST_GEN_NOISY = 1, ST_NOISY = 2, ST_KILLER_1 = 3, ST_KILLER_2 = 4, ST_COUNTER = 5,
+  ST_GEN_QUIET = 6, ST_QUIET = 7, ST_BAD_NOISY = 8, ST_DONE = 9,
+  ST_HASH_EVASION = 10, ST_GEN_EVASIONS = 11, ST_EVASIONS = 12;
+/** Picker state per ply: stage, next slot, end of list, losing captures set aside, hash move, killers, countermove. */
+const pk = new Int32Array(MAX_PLY * 8);
+const PK_STAGE = 0, PK_CUR = 1, PK_END = 2, PK_BAD = 3, PK_HASH = 4, PK_K1 = 5, PK_K2 = 6, PK_CM = 7;
+/** Where the move just handed out came from. */
+const KIND_HASH = 0, KIND_GOOD_NOISY = 1, KIND_KILLER = 2, KIND_QUIET = 3, KIND_BAD_NOISY = 4, KIND_EVASION = 5;
+let pickedKind = 0;
+
+function pickStart(ply, ttMove, inCheck) {
+  const o = ply << 3;
+  pk[o + PK_STAGE] = inCheck ? (ttMove !== 0 ? ST_HASH_EVASION : ST_GEN_EVASIONS) : (ttMove !== 0 ? ST_HASH : ST_GEN_NOISY);
+  pk[o + PK_HASH] = ttMove;
+  pk[o + PK_BAD] = 0;
+}
+
+/** Brings the best-scored move of mlist[i..end) to slot i and returns it. */
+function selectBest(i, end) {
+  let best = i, bestScore = mscore[i];
+  for (let j = i + 1; j < end; j++) {
+    if (mscore[j] > bestScore) { bestScore = mscore[j]; best = j; }
+  }
+  const m = mlist[best];
+  if (best !== i) { mlist[best] = mlist[i]; mscore[best] = mscore[i]; mlist[i] = m; mscore[i] = bestScore; }
+  return m;
+}
+
+/** Most valuable victim first, least valuable attacker to break ties; a queen promotion counts as winning a queen. */
+function scoreNoisy(from, end) {
+  for (let i = from; i < end; i++) {
+    const m = mlist[i];
+    const promo = (m >> 24) & 7;
+    mscore[i] = (((m >> 21) & 7) << 6) - ((m >> 16) & 7) + (promo === QUEEN ? 512 : promo !== 0 ? -1024 : 0);
+  }
+}
+
+/** A killer or countermove is tried only if it is a quiet move that can be played here. */
+function quietCandidate(m, o) {
+  return m !== 0 && m !== pk[o + PK_HASH] && isPseudoLegal(m);
+}
+
+/** The next move to try at `ply`, or 0 when there are none left. `skipQuiets`: leave out the remaining quiet moves. */
+function pickMove(ply, skipQuiets) {
+  const o = ply << 3, first = ply << 8;
+  let m, i, end, cur;
+  if (skipQuiets && pk[o + PK_STAGE] >= ST_KILLER_1 && pk[o + PK_STAGE] <= ST_QUIET) {
+    pk[o + PK_STAGE] = ST_BAD_NOISY;
+    pk[o + PK_CUR] = first;
+  }
+  switch (pk[o + PK_STAGE]) {
+    case ST_HASH:
+      pk[o + PK_STAGE] = ST_GEN_NOISY;
+      pickedKind = KIND_HASH;
+      return pk[o + PK_HASH];
+
+    case ST_GEN_NOISY:
+      end = genNoisy(first);
+      scoreNoisy(first, end);
+      pk[o + PK_CUR] = first; pk[o + PK_END] = end;
+      pk[o + PK_STAGE] = ST_NOISY;
+      // falls through
+    case ST_NOISY:
+      cur = pk[o + PK_CUR]; end = pk[o + PK_END];
+      while (cur < end) {
+        m = selectBest(cur, end);
+        cur++;
+        if (m === pk[o + PK_HASH]) continue;
+        if (mscore[cur - 1] < 0 || !seeGE(m, 0)) {
+          // Loses material (or under-promotes): set aside in the part of the list already used up.
+          mlist[first + pk[o + PK_BAD]++] = m;
+          continue;
+        }
+        pk[o + PK_CUR] = cur;
+        pickedKind = KIND_GOOD_NOISY;
+        return m;
+      }
+      pk[o + PK_CUR] = cur;
+      if (skipQuiets) { pk[o + PK_STAGE] = ST_BAD_NOISY; pk[o + PK_CUR] = first; return pickMove(ply, true); }
+      pk[o + PK_STAGE] = ST_KILLER_1;
+      // falls through
+    case ST_KILLER_1:
+      pk[o + PK_STAGE] = ST_KILLER_2;
+      m = killers[ply << 1];
+      pk[o + PK_K1] = 0;
+      if (quietCandidate(m, o)) { pk[o + PK_K1] = m; pickedKind = KIND_KILLER; return m; }
+      // falls through
+    case ST_KILLER_2:
+      pk[o + PK_STAGE] = ST_COUNTER;
+      m = killers[(ply << 1) + 1];
+      pk[o + PK_K2] = 0;
+      if (quietCandidate(m, o)) { pk[o + PK_K2] = m; pickedKind = KIND_KILLER; return m; }
+      // falls through
+    case ST_COUNTER:
+      pk[o + PK_STAGE] = ST_GEN_QUIET;
+      m = U[sp + F_MOVE];
+      m = m !== 0 ? counterMove[(((m >> 16) & 31) << 6) | SQ64[(m >> 8) & 255]] : 0;
+      pk[o + PK_CM] = 0;
+      if (m !== pk[o + PK_K1] && m !== pk[o + PK_K2] && quietCandidate(m, o)) {
+        pk[o + PK_CM] = m; pickedKind = KIND_KILLER; return m;
+      }
+      // falls through
+    case ST_GEN_QUIET:
+      cur = first + pk[o + PK_BAD];
+      end = genQuiets(cur, false);
+      for (i = cur; i < end; i++) mscore[i] = history[historyIndex(mlist[i])];
+      pk[o + PK_CUR] = cur; pk[o + PK_END] = end;
+      pk[o + PK_STAGE] = ST_QUIET;
+      // falls through
+    case ST_QUIET:
+      cur = pk[o + PK_CUR]; end = pk[o + PK_END];
+      while (cur < end) {
+        m = selectBest(cur, end);
+        cur++;
+        if (m === pk[o + PK_HASH] || m === pk[o + PK_K1] || m === pk[o + PK_K2] || m === pk[o + PK_CM]) continue;
+        pk[o + PK_CUR] = cur;
+        pickedKind = KIND_QUIET;
+        return m;
+      }
+      pk[o + PK_STAGE] = ST_BAD_NOISY;
+      pk[o + PK_CUR] = first;
+      // falls through
+    case ST_BAD_NOISY:
+      cur = pk[o + PK_CUR];
+      if (cur < first + pk[o + PK_BAD]) {
+        pk[o + PK_CUR] = cur + 1;
+        pickedKind = KIND_BAD_NOISY;
+        return mlist[cur];
+      }
+      pk[o + PK_STAGE] = ST_DONE;
+      return 0;
+
+    case ST_HASH_EVASION:
+      pk[o + PK_STAGE] = ST_GEN_EVASIONS;
+      pickedKind = KIND_HASH;
+      return pk[o + PK_HASH];
+
+    case ST_GEN_EVASIONS:
+      cur = genNoisy(first);
+      scoreNoisy(first, cur);
+      for (i = first; i < cur; i++) mscore[i] += 1 << 20;            // captures before quiet moves
+      end = genQuiets(cur, true);
+      for (i = cur; i < end; i++) mscore[i] = history[historyIndex(mlist[i])];
+      pk[o + PK_CUR] = first; pk[o + PK_END] = end;
+      pk[o + PK_STAGE] = ST_EVASIONS;
+      // falls through
+    case ST_EVASIONS:
+      cur = pk[o + PK_CUR]; end = pk[o + PK_END];
+      while (cur < end) {
+        m = selectBest(cur, end);
+        cur++;
+        if (m === pk[o + PK_HASH]) continue;
+        pk[o + PK_CUR] = cur;
+        pickedKind = KIND_EVASION;
+        return m;
+      }
+      pk[o + PK_STAGE] = ST_DONE;
+      return 0;
+
+    default:
+      return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Search: quiescence
+// ---------------------------------------------------------------------------
+
+const DELTA_MARGIN = 180;              // a capture must bring the score within this of alpha
+
+/**
+ * Plays out captures and queen promotions until the position is quiet enough
+ * for the static evaluation to be trusted. A side in check must answer it:
+ * every legal reply is tried.
+ */
+function qsearch(alpha, beta, ply) {
+  pvLen[ply] = 0;
+  if (++nodes >= checkAt) poll();
+  if (stopped) return 0;
+  if (ply >= MAX_PLY - 2) return evaluate();
+
+  const s = sp;
+  const keyLo = U[s + F_KEYLO], keyHi = U[s + F_KEYHI];
+  const pvNode = beta - alpha > 1;
+  const checker = findChecker();
+  const inCheck = checker !== 0;
+
+  let ttMove = 0, ttScore = 0, ttBound = 0, staticEval = NO_EVAL;
+  if (ttProbe(keyLo, keyHi)) {
+    ttMove = hMove; ttBound = hBound; staticEval = hEval; ttScore = hScore;
+    if (ttScore >= MATE_BOUND) ttScore -= ply; else if (ttScore <= -MATE_BOUND) ttScore += ply;
+    if (!pvNode && (ttScore >= beta ? (ttBound & BOUND_LOWER) !== 0 : (ttBound & BOUND_UPPER) !== 0)) return ttScore;
+  }
+
+  const alpha0 = alpha;
+  let best, bestMove = 0;
+  if (inCheck) {
+    best = ply - MATE;
+    staticEval = NO_EVAL;
+  } else {
+    if (staticEval === NO_EVAL) staticEval = evaluate();
+    // Standing pat: the side to move need not capture at all.
+    best = staticEval;
+    if (ttBound !== 0 && (ttScore > best ? (ttBound & BOUND_LOWER) !== 0 : (ttBound & BOUND_UPPER) !== 0)) best = ttScore;
+    if (best >= beta) {
+      if (ttBound === 0) ttStore(keyLo, keyHi, 0, best, staticEval, 0, BOUND_LOWER);
+      return best;
+    }
+    if (best > alpha) alpha = best;
+  }
+
+  const first = ply << 8;
+  let end = genNoisy(first), i, m, score;
+  scoreNoisy(first, end);
+  if (inCheck) {
+    for (i = first; i < end; i++) mscore[i] += 1 << 20;
+    const quiets = end;
+    end = genQuiets(end, true);
+    for (i = quiets; i < end; i++) mscore[i] = history[historyIndex(mlist[i])];
+  }
+  if (ttMove !== 0) {
+    for (i = first; i < end; i++) if (mlist[i] === ttMove) { mscore[i] = 1 << 24; break; }
+  }
+  const futility = staticEval + DELTA_MARGIN;
+
+  for (i = first; i < end; i++) {
+    m = selectBest(i, end);
+    if (!inCheck) {
+      if (mscore[i] < 0) break;                                   // only under-promotions are left
+      // Even winning the piece outright would not reach alpha.
+      if ((m & M_PROMO) === 0 && futility + SEE_VALUE[(m >> 21) & 7] <= alpha) {
+        if (futility + SEE_VALUE[(m >> 21) & 7] > best) best = futility + SEE_VALUE[(m >> 21) & 7];
+        continue;
+      }
+      if (!seeGE(m, 0)) continue;                                 // loses material
+    }
+    if (!isLegal(m, checker)) continue;
+    makeMove(m);
+    score = 0 - qsearch(0 - beta, 0 - alpha, ply + 1);
+    unmakeMove(m);
+    if (stopped) return 0;
+    if (score > best) {
+      best = score;
+      if (score > alpha) {
+        bestMove = m;
+        if (pvNode) updatePv(ply, m);
+        if (score >= beta) break;
+        alpha = score;
+      }
+    }
+  }
+
+  ttStore(keyLo, keyHi, bestMove,
+    best >= MATE_BOUND ? best + ply : best <= -MATE_BOUND ? best - ply : best,
+    staticEval, 0, best >= beta ? BOUND_LOWER : best > alpha0 ? BOUND_EXACT : BOUND_UPPER);
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// Search: the main recursion
+// ---------------------------------------------------------------------------
+
+/** The fifty-move rule has run out at this node: a draw, unless the last move mated. */
+function fiftyMoveScore(ply) {
+  const checker = findChecker();
+  return checker !== 0 && !anyLegalMove(checker) ? ply - MATE : 0;
+}
+
+/**
+ * Principal-variation search (negamax, fail-soft): the value of the position
+ * for the side to move, searched `depth` plies deep, as far as it lies inside
+ * (alpha, beta). `ply` is the distance from the root.
+ */
+function search(depth, alpha, beta, ply, cutNode) {
+  pvLen[ply] = 0;
+  const s = sp;
+
+  // Draws: the fifty-move rule, and any position seen before (in the game or
+  // on the way here from the root) - coming back to it gets nowhere.
+  const half = U[s + F_HALF];
+  if (half >= 4) {
+    if (half >= 100) return fiftyMoveScore(ply);
+    if (repeated(s, half)) return 0;
+  }
+
+  if (depth <= 0) return qsearch(alpha, beta, ply);
+
+  if (++nodes >= checkAt) poll();
+  if (stopped) return 0;
+  if (ply >= MAX_PLY - 2) return evaluate();
+
+  // Mate-distance pruning: no line from here can beat a mate already found nearer the root.
+  if (alpha < ply - MATE) alpha = ply - MATE;
+  if (beta > MATE - ply - 1) beta = MATE - ply - 1;
+  if (alpha >= beta) return alpha;
+
+  const pvNode = beta - alpha > 1;
+  const checker = findChecker();
+  const inCheck = checker !== 0;
+  const keyLo = U[s + F_KEYLO], keyHi = U[s + F_KEYHI];
+
+  // The hash table: a result from an earlier visit that is deep enough ends
+  // the search here (not on the principal variation, which is searched in
+  // full); otherwise its move is tried first.
+  let ttMove = 0, ttScore = 0, ttBound = 0, staticEval = NO_EVAL;
+  if (ttProbe(keyLo, keyHi)) {
+    ttMove = hMove; ttBound = hBound; staticEval = hEval; ttScore = hScore;
+    if (ttScore >= MATE_BOUND) ttScore -= ply; else if (ttScore <= -MATE_BOUND) ttScore += ply;
+    if (!pvNode && hDepth >= depth && half < 90
+        && (ttScore >= beta ? (ttBound & BOUND_LOWER) !== 0 : (ttBound & BOUND_UPPER) !== 0)) {
+      return ttScore;
+    }
+    if (ttMove !== 0 && !(isPseudoLegal(ttMove) && isLegal(ttMove, checker))) ttMove = 0;
+  }
+
+  if (inCheck) staticEval = NO_EVAL;
+  else if (staticEval === NO_EVAL) staticEval = evaluate();
+  evalStack[ply] = staticEval;
+
+  const alpha0 = alpha;
+  let best = -INF, bestMove = 0, score = 0, legal = 0, nTried = 0, m, quiet, newDepth;
+  pickStart(ply, ttMove, inCheck);
+  while ((m = pickMove(ply, false)) !== 0) {
+    if (pickedKind !== KIND_HASH && !isLegal(m, checker)) continue;
+    legal++;
+    quiet = (m & M_NOISY) === 0;
+    newDepth = depth - 1;
+    if (givesCheck(m)) newDepth++;                                 // check extension
+
+    makeMove(m);
+    if (legal === 1) score = 0 - search(newDepth, 0 - beta, 0 - alpha, ply + 1, false);
+    else {
+      // Later moves only have to show they are no better: a zero-width
+      // search, repeated with the full window if it fails.
+      score = 0 - search(newDepth, -1 - alpha, 0 - alpha, ply + 1, !cutNode);
+      if (score > alpha && score < beta) score = 0 - search(newDepth, 0 - beta, 0 - alpha, ply + 1, false);
+    }
+    unmakeMove(m);
+    if (stopped) return 0;
+
+    if (score > best) {
+      best = score;
+      if (score > alpha) {
+        bestMove = m;
+        if (pvNode) updatePv(ply, m);
+        if (score >= beta) {
+          if (quiet) rewardQuiet(m, ply, depth, nTried);
+          break;
+        }
+        alpha = score;
+      }
+    }
+    if (quiet && nTried < 64) triedQuiets[(ply << 6) + nTried++] = m;
+  }
+
+  if (legal === 0) return inCheck ? ply - MATE : 0;              // checkmate or stalemate
+
+  ttStore(keyLo, keyHi, bestMove,
+    best >= MATE_BOUND ? best + ply : best <= -MATE_BOUND ? best - ply : best,
+    staticEval, depth, best >= beta ? BOUND_LOWER : best > alpha0 ? BOUND_EXACT : BOUND_UPPER);
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// Search: the root
+// ---------------------------------------------------------------------------
+
+/** The legal moves of the root position, best first, and what the last pass over them found. */
+const rootMoves = new Int32Array(256);
+const rootNodes = new Float64Array(256);   // size of each move's subtree in the last iteration
+let rootCount = 0;
+let rootBest = 0;                      // best move of the pass in progress (0: none has beaten alpha yet)
+let rootBestScore = 0;
+let rootPv = [];
+
+function generateRootMoves() {
+  const checker = findChecker();
+  const first = (MAX_PLY - 1) << 8;
+  const end = genQuiets(genNoisy(first), checker !== 0);
+  rootCount = 0;
+  for (let i = first; i < end; i++) {
+    if (isLegal(mlist[i], checker)) { rootNodes[rootCount] = 0; rootMoves[rootCount++] = mlist[i]; }
+  }
+  return checker;
+}
+
+/** Puts root move `m` first, keeping the order of the others. */
+function rootToFront(m) {
+  let i = 0;
+  while (i < rootCount && rootMoves[i] !== m) i++;
+  if (i >= rootCount) return;
+  const n = rootNodes[i];
+  for (; i > 0; i--) { rootMoves[i] = rootMoves[i - 1]; rootNodes[i] = rootNodes[i - 1]; }
+  rootMoves[0] = m; rootNodes[0] = n;
+}
+
+/** After an iteration: the best move stays first, the rest go by the size of their subtrees (stable). */
+function sortRootMoves() {
+  for (let i = 2; i < rootCount; i++) {
+    const m = rootMoves[i], n = rootNodes[i];
+    let j = i - 1;
+    for (; j >= 1 && rootNodes[j] < n; j--) { rootMoves[j + 1] = rootMoves[j]; rootNodes[j + 1] = rootNodes[j]; }
+    rootMoves[j + 1] = m; rootNodes[j + 1] = n;
+  }
+}
+
+/**
+ * One pass over the root moves at `depth` inside (alpha, beta). Leaves the
+ * best move that beat alpha in rootBest (with its score and line), also when
+ * the pass is cut short by a limit.
+ */
+function searchRoot(depth, alpha, beta) {
+  let best = -INF, score;
+  pvLen[0] = 0;
+  for (let i = 0; i < rootCount; i++) {
+    const m = rootMoves[i];
+    const before = nodes;
+    makeMove(m);
+    if (i === 0) score = 0 - search(depth - 1, 0 - beta, 0 - alpha, 1, false);
+    else {
+      score = 0 - search(depth - 1, -1 - alpha, 0 - alpha, 1, true);
+      if (score > alpha && !stopped) score = 0 - search(depth - 1, 0 - beta, 0 - alpha, 1, false);
+    }
+    unmakeMove(m);
+    if (stopped) return best;
+    rootNodes[i] = nodes - before;
+    if (score > best) {
+      best = score;
+      if (score > alpha) {
+        rootBest = m; rootBestScore = score;
+        rootPv = [m];
+        for (let k = 0; k < pvLen[1]; k++) rootPv.push(pvTable[MAX_PLY + k]);
+        if (score >= beta) break;
+        alpha = score;
+      }
+    }
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------------------
 // The engine object
 // ---------------------------------------------------------------------------
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+/** Start another iteration only while less than this share of the time is used. */
+const NEXT_ITERATION_SHARE = 0.6;
 
 /** The engine whose position is currently loaded into the module state. */
 let loaded = null;
@@ -1568,12 +2170,30 @@ let loaded = null;
 export class Engine {
   #fen = START_FEN;
   #moves = [];
+  #hashMb = 32;
+  // Allocated on first use, so that an engine made only to count or evaluate costs nothing.
+  #tt = null;
+  #ttMask = 0;
+  #ttGen = 1;
+  #history = null;
+  #counterMove = null;
 
+  /** options: { hashMb = 32 } - megabytes for the transposition table. */
   constructor(options = {}) {
+    const hashMb = Number(options.hashMb);
+    if (Number.isFinite(hashMb) && hashMb > 0) this.#hashMb = Math.min(hashMb, 1024);
     this.setPosition(START_FEN);
   }
 
+  /** Forgets the hash table, the move-ordering history and the game: as good as a new engine. */
   newGame() {
+    if (this.#tt !== null) {
+      this.#tt.fill(0);
+      this.#history.fill(0);
+      this.#counterMove.fill(0);
+      this.#ttGen = 1;
+    }
+    this.setPosition(START_FEN);
   }
 
   /** Sets the position: a FEN and the UCI moves played from it (the game so far). */
@@ -1590,14 +2210,165 @@ export class Engine {
     loaded = this;
   }
 
+  /** Makes this engine's position the one on the module's board. */
   #load() {
     if (loaded === this) return;
     this.setPosition(this.#fen, this.#moves);
+  }
+
+  /** Loads the position and binds this engine's tables for a search. */
+  #begin() {
+    this.#load();
+    if (this.#tt === null) {
+      // The largest power of two of 64-byte buckets that fits in the budget.
+      let buckets = 1 << 10;
+      while (buckets * 2 * 64 <= this.#hashMb * 1048576 && buckets < (1 << 24)) buckets *= 2;
+      this.#tt = new Int32Array(buckets * 16);
+      this.#ttMask = buckets - 1;
+      this.#history = new Int16Array(2 * 64 * 64);
+      this.#counterMove = new Int32Array(24 * 64);
+    }
+    tt = this.#tt; ttMask = this.#ttMask;
+    history = this.#history; counterMove = this.#counterMove;
+    // A new generation for the hash table: what earlier searches left is still used, but replaced first.
+    this.#ttGen = (this.#ttGen + 1) & 255;
+    ttGen = this.#ttGen;
+    killers.fill(0);
+    nodes = 0;
+    stopped = false;
+    mustFinish = false;
+    nodeCap = Infinity;
+    deadline = Infinity;
+    checkAt = 0;
   }
 
   /** Number of leaf nodes of the legal move tree `depth` plies deep. */
   perft(depth) {
     this.#load();
     return depth <= 0 ? 1 : perftCount(depth, 0);
+  }
+
+  /** Static evaluation of the position in centipawns, from the side to move's point of view. */
+  evaluate() {
+    this.#load();
+    return evaluate();
+  }
+
+  /**
+   * Searches the position by iterative deepening.
+   * limits: { timeMs = 1000, maxDepth = 64, nodeLimit = Infinity }.
+   * Returns { move, scoreCp, depth, nodes, timeMs, pv }: the move as a UCI
+   * string (null if there is no legal move), its score for the side to move
+   * (a mate in n plies is 100000 - n), the last iteration that was completed,
+   * and the line the engine expects.
+   */
+  search(limits = {}) {
+    const started = now();
+    this.#begin();
+    const timeMs = limits.timeMs === undefined ? 1000 : Math.max(0, Number(limits.timeMs) || 0);
+    let maxDepth = limits.maxDepth === undefined ? 64 : Math.floor(Number(limits.maxDepth)) || 1;
+    maxDepth = Math.max(1, Math.min(maxDepth, MAX_PLY - 28));
+    const nodeLimit = limits.nodeLimit === undefined ? Infinity : Math.max(1, Number(limits.nodeLimit) || 1);
+
+    const checker = generateRootMoves();
+    if (rootCount === 0) {
+      return { move: null, scoreCp: checker !== 0 ? -MATE : 0, depth: 0, nodes: 0, timeMs: 0, pv: [] };
+    }
+    // A hash move from an earlier search of this position goes first.
+    if (ttProbe(U[sp + F_KEYLO], U[sp + F_KEYHI]) && hMove !== 0) rootToFront(hMove);
+
+    nodeCap = nodeLimit;
+    deadline = started + timeMs;
+    if (rootCount === 1) {
+      // A forced move needs no thought: a glance ahead for the score is enough.
+      maxDepth = Math.min(maxDepth, 4);
+      nodeCap = Math.min(nodeCap, 4000);
+    }
+
+    let bestMove = rootMoves[0], bestScore = 0, completed = 0, pv = [bestMove];
+    for (let depth = 1; depth <= maxDepth; depth++) {
+      mustFinish = depth === 1;          // the first iteration always completes, whatever the limits
+      rootBest = 0;
+      const score = searchRoot(depth, -INF, INF);
+      if (stopped) {
+        // Cut short. The previous best move was searched first, so a move
+        // that has already beaten it at this depth is a real improvement.
+        if (rootBest !== 0 && rootBest !== bestMove) { bestMove = rootBest; bestScore = rootBestScore; pv = rootPv; }
+        break;
+      }
+      bestMove = rootBest; bestScore = score; pv = rootPv; completed = depth;
+      rootToFront(bestMove);
+      sortRootMoves();
+
+      if (score >= MATE_BOUND && MATE - score <= depth) break;     // a forced mate, as short as this depth can see
+      if (score <= -MATE_BOUND && MATE + score <= depth) break;    // mated whatever we do
+      // Another iteration takes several times as long as this one did: with
+      // most of the time gone it could not get anywhere.
+      if (now() - started >= timeMs * NEXT_ITERATION_SHARE) break;
+    }
+
+    return {
+      move: moveToUci(bestMove),
+      scoreCp: bestScore,
+      depth: completed,
+      nodes,
+      timeMs: Math.round(now() - started),
+      pv: pv.map(moveToUci),
+    };
+  }
+
+  /**
+   * Searches one root move: the position after `uci` to `depth - 1` plies,
+   * inside the window (lower, upper). Returns its score from the root side's
+   * point of view - exact if strictly inside the window, otherwise a bound
+   * (<= lower or >= upper) - or null if the move is not legal or a limit
+   * (limits: { timeMs, nodeLimit }) runs out first.
+   */
+  scoreMove(uci, lower, upper, depth, limits = {}) {
+    const started = now();
+    this.#begin();
+    const m = findMove(uci);
+    if (m === 0) return null;
+    if (limits.timeMs !== undefined) {
+      const timeMs = Number(limits.timeMs) || 0;
+      if (timeMs <= 0) return null;
+      deadline = started + timeMs;
+    }
+    if (limits.nodeLimit !== undefined) nodeCap = Math.max(1, Number(limits.nodeLimit) || 1);
+    makeMove(m);
+    const score = 0 - search(Math.max(1, Math.floor(depth)) - 1, 0 - upper, 0 - lower, 1, false);
+    unmakeMove(m);
+    return stopped ? null : score;
+  }
+
+  /**
+   * Every root move that scores within `windowCp` of the best, with its exact
+   * score at the depth `result` (what search() returned) reached:
+   * { [uci]: scoreCp }. Stops early, with what it has, when
+   * limits.nodeLimit nodes have been searched.
+   */
+  candidates(result, windowCp, limits = {}) {
+    if (!result || typeof result.move !== 'string') return {};
+    this.#begin();
+    const best = result.scoreCp;
+    const found = { [result.move]: best };
+    if (Math.abs(best) >= MATE_BOUND) return found;
+    if (limits.nodeLimit !== undefined) nodeCap = Math.max(1, Number(limits.nodeLimit) || 1);
+    const depth = Math.max(1, result.depth);
+    const floor = best - windowCp;
+    generateRootMoves();
+    for (let i = 0; i < rootCount; i++) {
+      const m = rootMoves[i];
+      const uci = moveToUci(m);
+      if (uci === result.move) continue;
+      makeMove(m);
+      // First ask only whether the move reaches the floor; if it does, find out by how much.
+      let score = 0 - search(depth - 1, 0 - floor, 1 - floor, 1, true);
+      if (!stopped && score >= floor) score = 0 - search(depth - 1, -INF, 1 - floor, 1, false);
+      unmakeMove(m);
+      if (stopped) break;
+      if (score >= floor) found[uci] = score;
+    }
+    return found;
   }
 }

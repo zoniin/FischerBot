@@ -57,7 +57,7 @@ export const PHASE_FEATURES = Object.freeze([
   'retreat',            // a piece (not a pawn) goes backwards
   'to_centre',          // how central the destination is: 0 on the edge, 0.73 on d4, e4, d5, e5
   'centre_gain',        // how much more central than where the piece came from
-  'near_enemy_king',    // how close the destination is to the enemy king: 1 next to him, 0 seven squares off
+  'near_enemy_king',    // how close the destination is to the enemy king: 6/7 next to him, 0 seven king moves off
   'king_approach',      // how much closer to the enemy king than before
   'escapes_attack',     // the piece was attacked by something cheaper, or attacked and unprotected
   'into_pawn_attack',   // a piece goes where an enemy pawn attacks it
@@ -81,7 +81,7 @@ export const GLOBAL_FEATURES = Object.freeze([
   'pawn_lever',               // from its new square the pawn attacks an enemy pawn
   'pawn_passed_push',         // no enemy pawn ahead of it on its own or a neighbouring file
   'pawn_storm',               // a pawn on its fourth rank or beyond, within a file of the enemy king (not in the endgame)
-  'pawn_shelter_push',        // a pawn from in front of its own king, who is still on his home rank
+  'pawn_shelter_push',        // a pawn on or next to the file of its own king, who stands on his home rank
   'knight_develops',          // a knight leaves the home rank
   'knight_to_rim',            // a knight goes to the a- or h-file
   'knight_outpost',           // a knight on its 4th-6th rank, protected by a pawn, that no enemy pawn can ever attack
@@ -176,7 +176,10 @@ for (let sq = 0; sq < 64; sq++) {
   ATTACK_SPAN[0][sq] = adjacent & down;
 }
 
-/** The squares a piece of that type attacks from `sq` when the squares of `occupied` hold pieces (`turn`: a pawn's colour). */
+/**
+ * The squares a piece of that type attacks from `sq` when the squares of
+ * `occupied` hold pieces. `turn` is its colour, which matters for a pawn.
+ */
 function attacksFrom(pieceType, sq, occupied, turn) {
   switch (pieceType) {
     case PAWN: return BB_PAWN_ATTACKS[turn ? 1 : 0][sq];
@@ -192,7 +195,20 @@ function attacksFrom(pieceType, sq, occupied, turn) {
 // Features
 // ---------------------------------------------------------------------------
 
-/** Everything about a position that is shared by all of its moves. */
+/**
+ * Everything about a position that is shared by all of its moves.
+ *
+ *   position, turn                 the position and the side to move in it
+ *   phase, opening                 gamePhase(), and whether the opening repertoire applies
+ *   own, them, occupied            bitboards: the mover's pieces, the opponent's, both
+ *   ownPawns, enemyPawns           bitboards
+ *   enemyPawnAttacks               bitboard of the squares the opponent's pawns attack
+ *   ownKing, enemyKing             squares
+ *   homeRank                       the mover's first rank: 0 for White, 7 for Black
+ *   lastTo                         the square the opponent has just moved to, -1 without a move history
+ *   checkSquares[pieceType]        bitboard of the squares from which such a piece would give check
+ *   discoverers                    bitboard of the mover's pieces that shield the enemy king from a line piece
+ */
 export class PositionContext {
   /** @param position  a rules.js Position. It must not be moved on while the context is in use. */
   constructor(position) {
@@ -214,18 +230,20 @@ export class PositionContext {
     const ownKing = position.king(turn);
     this.ownKing = ownKing === null ? -1 : ownKing;
     const played = position.moveStack;
-    this.lastTo = played.length > 0 ? played[played.length - 1].to : -1;   // where the opponent has just moved to
+    this.lastTo = played.length > 0 ? played[played.length - 1].to : -1;
     this.homeRank = turn ? 0 : 7;
-    this.attackedCache = new Map();   // escapesAttack() by square
+    this.attackedCache = new Map();   // what escapesAttack() answered, by square
 
-    // Squares from which each piece type would give check.
+    // Squares from which each piece type would give check: where a piece of
+    // that type standing on the enemy king's square would attack.
     const diagonal = bishopAttacks(king, occupied);
     const straight = rookAttacks(king, occupied);
     this.checkSquares = [0n, BB_PAWN_ATTACKS[turn ? 0 : 1][king], BB_KNIGHT_ATTACKS[king],
       diagonal, straight, diagonal | straight, 0n];
 
-    // Own pieces that stand alone between the enemy king and an own bishop,
-    // rook or queen aiming at him: moving one off the line discovers check.
+    // The mover's bishops, rooks and queens on a line with the enemy king
+    // ("snipers"). An own piece standing alone between one of them and the
+    // king discovers check when it leaves that line.
     const snipers = ((bishopAttacks(king, 0n) & (position.bishops | position.queens))
       | (rookAttacks(king, 0n) & (position.rooks | position.queens))) & own;
     let discoverers = 0n;
@@ -248,9 +266,9 @@ export class PositionContext {
       if (((attackers & position.pawns) !== 0n && value > 1)
           || ((attackers & (position.knights | position.bishops)) !== 0n && value > 3)
           || ((attackers & position.rooks) !== 0n && value > 5)) {
-        result = true;
+        result = true;    // attacked by something cheaper
       } else if (pieceType !== KING && position.attackersMask(this.turn, from) === 0n) {
-        result = true;
+        result = true;    // attacked and without a protector
       }
     }
     this.attackedCache.set(from, result);
@@ -444,12 +462,14 @@ export class StyleModel {
     if (this.weights.length !== N_FEATURES) {
       throw new Error(`Weight vector has ${this.weights.length} entries, expected ${N_FEATURES}`);
     }
-    this.metadata = metadata || {};
+    if (metadata == null) metadata = {};
+    if (typeof metadata !== 'object' || Array.isArray(metadata)) throw new Error('Model metadata is not a table');
+    this.metadata = metadata;
     /** Extra reluctance to leave the engine's first choice (chosen by cross-validation). */
     this.enginePreference = 0;
-    if (this.metadata.engine_preference !== undefined) {
-      if (typeof this.metadata.engine_preference !== 'number') throw new Error('engine_preference is not a number');
-      this.enginePreference = this.metadata.engine_preference;
+    if (metadata.engine_preference !== undefined) {
+      if (typeof metadata.engine_preference !== 'number') throw new Error('engine_preference is not a number');
+      this.enginePreference = metadata.engine_preference;
     }
   }
 
@@ -488,6 +508,9 @@ export class StyleModel {
    *
    * Engine features are left out: this is pure stylistic preference.
    * Moves with equal scores stay in the order legalMoves() gave them.
+   *
+   * @param position  a rules.js Position; one that knows the moves played so
+   *                  far (Position.fromMoves), or `recapture` cannot be seen
    */
   styleScores(position) {
     const ctx = new PositionContext(position);
@@ -517,7 +540,11 @@ export class StyleModel {
    * Derived from the learned weights: a move replaces the engine's first
    * choice when  styleGain + engine_loss weight * loss / 100  exceeds the
    * engine_best weight plus `enginePreference`. Returns -1 when the gain is
-   * not worth a switch at any price.
+   * not worth a switch at any price (and Infinity for a model in which losing
+   * centipawns costs nothing).
+   *
+   * @param phase      0, 1 or 2: see gamePhase()
+   * @param styleGain  style score of the move minus that of the engine's choice
    */
   allowedLoss(phase, styleGain) {
     const base = phase * N_PHASE;
