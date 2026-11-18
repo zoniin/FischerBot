@@ -51,11 +51,11 @@ SPECIAL_FENS = [
     "8/8/8/4k3/8/8/8/KB6 w - - 0 1",                                                # insufficient material
     "8/8/8/4k3/8/8/8/KNN5 w - - 0 1",
     "6k1/5p1p/8/8/8/8/rq6/2Q4K w - - 0 1",
-    "R6k/8/8/8/8/8/8/R3K2R w KQ - 0 1",
+    "R6r/6k1/8/8/8/8/8/R3K2R w KQ - 0 1",                                           # two rooks take on h8
     "3rk3/8/8/8/8/2n5/8/3RK3 b - - 0 1",
     "8/8/2k5/8/8/3N1N2/8/3K4 w - - 0 1",                                            # SAN disambiguation (two knights)
     "8/8/2k5/8/R6R/8/8/R2K4 w - - 0 1",                                             # three rooks: file and rank disambiguation
-    "k7/8/8/3Q3Q/8/8/8/K6Q w - - 0 1",                                              # full-square disambiguation
+    "8/8/1k6/8/4Q2Q/8/8/K6Q w - - 0 1",                                             # full-square disambiguation
     # Insufficient material, as python-chess defines it
     "8/8/8/4k3/8/8/8/K7 w - - 0 1",                                                 # K v K
     "8/8/8/4k3/8/8/8/KN6 w - - 0 1",                                                # K+N v K
@@ -67,6 +67,10 @@ SPECIAL_FENS = [
     "8/8/8/4k3/3b4/8/8/KN6 w - - 0 1",                                              # K+N v K+B
     "8/8/8/4k3/8/8/P7/K7 w - - 0 1",                                                # a pawn is enough
 ]
+
+
+for _fen in SPECIAL_FENS:
+    assert chess.Board(_fen).is_valid(), f"not a legal position: {_fen}"
 
 
 def write(name, payload):
