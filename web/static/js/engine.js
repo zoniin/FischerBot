@@ -1983,10 +1983,30 @@ function fiftyMoveScore(ply) {
   return checker !== 0 && !anyLegalMove(checker) ? ply - MATE : 0;
 }
 
+// Selectivity. Every number here was arrived at by measurement (time to
+// depth on the fixture's middlegames, the tactical suite, matches between
+// builds); see the engine notes.
+const RFP_DEPTH = 7, RFP_MARGIN = 80;        // reverse futility: depth limit, margin per ply
+const NMP_DEPTH = 2;                         // null move: minimum depth
+const IIR_DEPTH = 4;                         // no hash move at this depth or more: search one ply less
+const LMP_DEPTH = 6, LMP_BASE = 3;           // late move pruning: quiet moves tried = base + depth^2 (half when not improving)
+const FUT_DEPTH = 6, FUT_BASE = 100, FUT_MARGIN = 90;   // futility pruning of quiet moves
+const SEE_QUIET_DEPTH = 6, SEE_QUIET_MARGIN = 60;       // quiet moves that lose material
+const SEE_NOISY_DEPTH = 6, SEE_NOISY_MARGIN = 100;      // captures that lose material
+const LMR_DEPTH = 3;                         // late move reductions from this depth
+const CHECK_EXTENSION = 1;                   // 0: none, 1: every check, 2: checks that do not lose material
+
+/** Late move reductions: plies taken off by depth and by how late the move comes. */
+const LMR = new Uint8Array(64 * 64);
+for (let d = 1; d < 64; d++) {
+  for (let n = 1; n < 64; n++) LMR[(d << 6) | n] = Math.floor(0.8 + Math.log(d) * Math.log(n) / 2.4);
+}
+
 /**
  * Principal-variation search (negamax, fail-soft): the value of the position
  * for the side to move, searched `depth` plies deep, as far as it lies inside
- * (alpha, beta). `ply` is the distance from the root.
+ * (alpha, beta). `ply` is the distance from the root; `cutNode` says the
+ * parent expects this node to fail high (its first good move refutes it).
  */
 function search(depth, alpha, beta, ply, cutNode) {
   pvLen[ply] = 0;
@@ -2014,6 +2034,7 @@ function search(depth, alpha, beta, ply, cutNode) {
   const pvNode = beta - alpha > 1;
   const checker = findChecker();
   const inCheck = checker !== 0;
+  const us = stm;
   const keyLo = U[s + F_KEYLO], keyHi = U[s + F_KEYHI];
 
   // The hash table: a result from an earlier visit that is deep enough ends
@@ -2030,27 +2051,98 @@ function search(depth, alpha, beta, ply, cutNode) {
     if (ttMove !== 0 && !(isPseudoLegal(ttMove) && isLegal(ttMove, checker))) ttMove = 0;
   }
 
+  // The static evaluation, and whether the side to move stands better than
+  // it did two plies ago ("improving": then prune less).
+  let ev = NO_EVAL, improving = false;
   if (inCheck) staticEval = NO_EVAL;
-  else if (staticEval === NO_EVAL) staticEval = evaluate();
+  else {
+    if (staticEval === NO_EVAL) staticEval = evaluate();
+    // A hash score that bounds the true value from the right side is a better guess than the static one.
+    ev = staticEval;
+    if (ttBound !== 0 && (ttBound & (ttScore > ev ? BOUND_LOWER : BOUND_UPPER)) !== 0) ev = ttScore;
+    improving = ply < 2 || staticEval > evalStack[ply - 2];
+  }
   evalStack[ply] = staticEval;
 
+  if (!pvNode && !inCheck && beta > -MATE_BOUND) {
+    // Reverse futility: so far above beta that a few plies will not bring the score back down.
+    if (depth <= RFP_DEPTH && ev < MATE_BOUND && ev - RFP_MARGIN * (improving ? depth - 1 : depth) >= beta) return ev;
+
+    // Null move: let the opponent move twice. If the position still holds
+    // above beta after a reduced search, it is good enough to stop here.
+    // Not with pawns alone (zugzwang), nor twice running.
+    if (depth >= NMP_DEPTH && ev >= beta && U[s + F_MOVE] !== 0
+        && pcount[(8 << us) | KNIGHT] + pcount[(8 << us) | BISHOP] + pcount[(8 << us) | ROOK] + pcount[(8 << us) | QUEEN] !== 0) {
+      let r = 3 + (depth >> 2) + ((ev - beta) / 200 | 0 > 3 ? 3 : (ev - beta) / 200 | 0);
+      makeNull();
+      const v = 0 - search(depth - r, 0 - beta, 1 - beta, ply + 1, !cutNode);
+      unmakeNull();
+      if (stopped) return 0;
+      if (v >= beta) return v >= MATE_BOUND ? beta : v;
+    }
+  }
+
+  // No hash move at a depth where there should be one: not worth the full depth.
+  if (depth >= IIR_DEPTH && ttMove === 0) depth--;
+
+  // Quiet moves tried before the rest are skipped at shallow depth.
+  let lmpLimit = 9999;
+  if (depth <= LMP_DEPTH) {
+    lmpLimit = LMP_BASE + depth * depth;
+    if (!improving) lmpLimit >>= 1;
+  }
+
   const alpha0 = alpha;
-  let best = -INF, bestMove = 0, score = 0, legal = 0, nTried = 0, m, quiet, newDepth;
+  let best = -INF, bestMove = 0, score = 0, legal = 0, nTried = 0;
+  let m, quiet, kind, check, newDepth, r, d, skipQuiets = false;
   pickStart(ply, ttMove, inCheck);
-  while ((m = pickMove(ply, false)) !== 0) {
-    if (pickedKind !== KIND_HASH && !isLegal(m, checker)) continue;
+  while ((m = pickMove(ply, skipQuiets)) !== 0) {
+    kind = pickedKind;
+    if (kind !== KIND_HASH && !isLegal(m, checker)) continue;
     legal++;
     quiet = (m & M_NOISY) === 0;
+    check = givesCheck(m);
+
+    // Shallow pruning, once one move is known not to lose by force.
+    if (best > -MATE_BOUND && !pvNode) {
+      if (quiet) {
+        if (legal > lmpLimit) { skipQuiets = true; continue; }
+        if (!inCheck && !check) {
+          // Futility: the static evaluation is so far below alpha that a quiet move will not lift it.
+          d = depth - 1 - LMR[(depth > 63 ? 63 : depth) << 6 | (legal > 63 ? 63 : legal)];
+          if (d < 0) d = 0;
+          if (d <= FUT_DEPTH && staticEval + FUT_BASE + FUT_MARGIN * d <= alpha) { skipQuiets = true; continue; }
+          if (d <= SEE_QUIET_DEPTH && !seeGE(m, -SEE_QUIET_MARGIN * d * d)) continue;
+        }
+      } else if (depth <= SEE_NOISY_DEPTH && kind === KIND_BAD_NOISY && !seeGE(m, -SEE_NOISY_MARGIN * depth)) continue;
+    }
+
     newDepth = depth - 1;
-    if (givesCheck(m)) newDepth++;                                 // check extension
+    if (check && (CHECK_EXTENSION === 1 || (CHECK_EXTENSION === 2 && seeGE(m, 0)))) newDepth++;
 
     makeMove(m);
-    if (legal === 1) score = 0 - search(newDepth, 0 - beta, 0 - alpha, ply + 1, false);
-    else {
-      // Later moves only have to show they are no better: a zero-width
-      // search, repeated with the full window if it fails.
+    if (depth >= LMR_DEPTH && legal > (pvNode ? 2 : 1) && (quiet || kind === KIND_BAD_NOISY)) {
+      // Late move reductions: with good move ordering a late quiet move is
+      // unlikely to be best, so it is first searched less deep, and only at
+      // full depth if that surprises.
+      r = LMR[(depth > 63 ? 63 : depth) << 6 | (legal > 63 ? 63 : legal)];
+      if (pvNode) r--;
+      if (cutNode) r++;
+      if (!improving) r++;
+      if (kind === KIND_KILLER) r--;
+      if (check || inCheck) r--;
+      if (quiet) r -= history[historyIndex(m)] >> 12;             // -4..+3 by its record
+      d = newDepth - r;
+      if (d < 1) d = 1; else if (d > newDepth) d = newDepth;
+      score = 0 - search(d, -1 - alpha, 0 - alpha, ply + 1, true);
+      if (score > alpha && d < newDepth) score = 0 - search(newDepth, -1 - alpha, 0 - alpha, ply + 1, !cutNode);
+    } else if (!pvNode || legal > 1) {
+      // Later moves only have to show they are no better: a zero-width search.
       score = 0 - search(newDepth, -1 - alpha, 0 - alpha, ply + 1, !cutNode);
-      if (score > alpha && score < beta) score = 0 - search(newDepth, 0 - beta, 0 - alpha, ply + 1, false);
+    }
+    // On the principal variation the first move, and any move that beats alpha, gets the full window.
+    if (pvNode && (legal === 1 || (score > alpha && score < beta))) {
+      score = 0 - search(newDepth, 0 - beta, 0 - alpha, ply + 1, false);
     }
     unmakeMove(m);
     if (stopped) return 0;
