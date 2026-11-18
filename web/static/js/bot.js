@@ -31,17 +31,22 @@ import { gamePhase } from './style.js';
 // ---------------------------------------------------------------------------
 
 // The search settings of each level. `timeMs` bounds the whole reply; the three
-// weaker levels are held back by `maxDepth` and `nodeLimit` long before the
+// younger Fischers are held back by `maxDepth` and `nodeLimit` long before the
 // clock. `styleMarginCp` is the most centipawns a Fischer-like move may cost
 // against the engine's first choice. `strength` is what the page tells the
 // player: an estimate from matches against Stockfish 16 held to fixed ratings
 // (UCI_LimitStrength, 0.2-0.3 s a move) - see the README for the games behind it.
+//
+// The levels follow his own rise: his first published rating, in 1956, was
+// 1726 and a year later he was a master at 2231; by 1958 he was a grandmaster
+// and a Candidate; in 1963-64 he swept the U.S. Championship; in 1972 he was
+// rated 2785.
 const SEARCH_SETTINGS = {
   //             timeMs  maxDepth   nodeLimit  styleMarginCp  strength
-  prodigy:     [    400,        2,        300,            60, 'about 1350'],
-  grandmaster: [    600,        4,       3000,            50, 'about 1800'],
-  champion:    [   1000,        7,      30000,            40, 'about 2150'],
-  world:       [   2500,       64,   50000000,            30, 'over 2800'],
+  prodigy:     [    600,        6,      10000,            60, 'about 2000'],
+  grandmaster: [   1000,       10,     100000,            50, 'about 2400'],
+  champion:    [   1500,       12,     300000,            40, 'about 2650'],
+  world:       [   2500,       64,   50000000,            30, 'about 2800'],
 };
 
 /** One level: who he is (for the chooser), which of his games the book may use, how hard he thinks. */
