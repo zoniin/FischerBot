@@ -2,8 +2,9 @@
 
 ## Fischer's portrait
 
-`fischer.webp` (the avatar beside the board), `fischer-wide.webp` (the same
-picture cut wider, for the opponent chooser and the game-over card) and
+`fischer.webp` (the figure cut out of its background, to stand directly on
+the page above the board), `fischer-wide.webp` (the same picture cut wider,
+with its backdrop, for the opponent chooser and the game-over card) and
 `fischer-192.png` (the page icon) are made from one photograph:
 
 > **Schaker Bobby Fisher aan bord (archief)** — Fischer at the board.
