@@ -470,10 +470,10 @@ class TestTraining:
         positions = train_style.load_candidates()["positions"]
         wanted = train_style.decisions(corpus)
         assert len(wanted) > 3200
-        missing = [key for key, _, _ in wanted if key not in positions]
+        missing = [key for key, *_ in wanted if key not in positions]
         assert not missing, f"{len(missing)} decisions have no engine analysis, e.g. {missing[:3]}"
-        key, stack, _ = wanted[100]
-        board = chess.Board()
+        key, start, stack, _ = wanted[100]
+        board = chess.Board(start)
         for uci in stack:
             board.push_uci(uci)
         entry = positions[key]
