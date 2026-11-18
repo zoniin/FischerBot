@@ -467,10 +467,12 @@ class TestTraining:
         train_style = pytest.importorskip("train_style")
         if not train_style.CANDIDATES_PATH.exists():
             pytest.skip("engine analysis cache not built")
-        corpus = load_corpus(CORE_SOURCES)
-        positions = train_style.load_candidates()["positions"]
+        corpus = load_corpus()
+        cache = train_style.load_candidates()
+        assert cache["meta"]["engine"], "the cache names the engine that made it"
+        positions = cache["positions"]
         wanted = train_style.decisions(corpus)
-        assert len(wanted) > 3200
+        assert len(wanted) > 30000
         missing = [key for key, *_ in wanted if key not in positions]
         assert not missing, f"{len(missing)} decisions have no engine analysis, e.g. {missing[:3]}"
         key, start, stack, _ = wanted[100]
@@ -607,7 +609,7 @@ def client():
 class TestCommentary:
     """What the portrait says (web/static/data/commentary.json)."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def lines(self):
         import json
         path = Path(__file__).resolve().parent.parent / "web" / "static" / "data" / "commentary.json"
