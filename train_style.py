@@ -51,8 +51,8 @@ CANDIDATES_PATH = ROOT / "data" / "engine_candidates.json.gz"
 ANALYSE_JS = ROOT / "web" / "tools" / "analyse.js"
 
 # --- engine analysis (changing any of these means re-running --analyse)
-ANALYSIS_DEPTH = 10           # iterative deepening stops here ...
-ANALYSIS_NODES = 150_000      # ... or after this many nodes, whichever is first
+ANALYSIS_NODES = 100_000      # the search stops after this many nodes (about depth 14) ...
+ANALYSIS_DEPTH = 20           # ... or at this depth, whichever comes first
 ANALYSIS_WINDOW = 100         # centipawns: how far below the best move we keep scores
 CANDIDATE_NODES = 300_000     # node budget for scoring the other root moves
 
