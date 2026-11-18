@@ -24,23 +24,36 @@ DIFFICULTIES = {
     "hard": {"time_budget_ms": 6000, "max_depth": 64, "style_margin_cp": 30},
 }
 
+# The four Fischers of the web page (LEVELS in web/static/js/bot.js). The
+# browser normally plays them itself, with its own much faster engine; these
+# are what the server answers with when it cannot. `book_year` limits the
+# opening book to the games he had played by then.
+LEVELS = {
+    "prodigy": {"time_budget_ms": 700, "max_depth": 2, "style_margin_cp": 60, "book_year": 1956},
+    "grandmaster": {"time_budget_ms": 1500, "max_depth": 4, "style_margin_cp": 50, "book_year": 1958},
+    "champion": {"time_budget_ms": 2500, "max_depth": 64, "style_margin_cp": 40, "book_year": 1963},
+    "world": {"time_budget_ms": 6000, "max_depth": 64, "style_margin_cp": 30,
+              "book_year": 1972, "book_later": True},
+}
+_SETTINGS = {**DIFFICULTIES, **LEVELS}
+
 MAX_HISTORY = 1024  # longest legal chess games are far below this
 
 _bots = {}
 _bots_guard = threading.Lock()
 
 
-def _get_bot(difficulty: str):
-    """One (bot, lock) per difficulty so the transposition table persists.
+def _get_bot(setting: str):
+    """One (bot, lock) per difficulty or level so the transposition table persists.
 
     The engine holds mutable search state (deadline, killers, TT), so each
     bot instance must serve one request at a time.
     """
     with _bots_guard:
-        if difficulty not in _bots:
-            cfg = DIFFICULTIES.get(difficulty, DIFFICULTIES["medium"])
-            _bots[difficulty] = (FischerBot(**cfg), threading.Lock())
-        return _bots[difficulty]
+        if setting not in _bots:
+            cfg = _SETTINGS.get(setting, DIFFICULTIES["medium"])
+            _bots[setting] = (FischerBot(**cfg), threading.Lock())
+        return _bots[setting]
 
 
 def _replay(history) -> chess.Board:
@@ -115,9 +128,15 @@ def create_app() -> Flask:
         history = data.get("history")
         if not isinstance(history, list):
             return jsonify({"error": "Body must include 'history': list of UCI moves"}), 400
-        difficulty = data.get("difficulty", "medium")
-        if difficulty not in DIFFICULTIES:
-            return jsonify({"error": f"Unknown difficulty {difficulty!r}"}), 400
+        level = data.get("level")
+        if level is not None:
+            if level not in LEVELS:
+                return jsonify({"error": f"Unknown level {level!r}"}), 400
+            setting = level
+        else:
+            setting = data.get("difficulty", "medium")
+            if setting not in DIFFICULTIES:
+                return jsonify({"error": f"Unknown difficulty {setting!r}"}), 400
 
         try:
             board = _replay(history)
@@ -132,7 +151,7 @@ def create_app() -> Flask:
                 "legal_moves": [],
             })
 
-        bot, lock = _get_bot(difficulty)
+        bot, lock = _get_bot(setting)
         with lock:
             choice = bot.choose(board)
         board.push(choice.move)
@@ -147,6 +166,11 @@ def create_app() -> Flask:
         }
         if choice.book_citation:
             payload["book_citation"] = choice.book_citation
+        if choice.book_move is not None:
+            # the game cited first, as the web page's book describes it, and how
+            # many of his games reached this move
+            payload["book"] = {"game": choice.book_move.games[0].to_json(),
+                               "count": choice.book_move.count}
         if choice.eval_cp is not None:
             payload["eval_cp"] = choice.eval_cp
             payload["depth"] = choice.depth

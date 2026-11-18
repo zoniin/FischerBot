@@ -653,6 +653,19 @@ class TestApi:
         r = client.post("/api/move", json={"history": [], "difficulty": "impossible"})
         assert r.status_code == 400
 
+    def test_levels_set_the_bot_in_a_year_of_his_career(self, client):
+        """The web page's four Fischers: the book of 1956 holds only games he had played by then."""
+        r = client.post("/api/move", json={"history": [], "level": "prodigy"})
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["source"] == "book" and data["bot_move"] in ("e2e4", "g1f3")
+        assert data["book"]["game"]["year"] <= 1956
+        assert data["book"]["game"]["cite"] == data["book_citation"]
+        assert data["book"]["count"] >= 10
+        r = client.post("/api/move", json={"history": ["e2e4"], "level": "world"})
+        assert r.get_json()["book"]["game"]["opponent"]
+        assert client.post("/api/move", json={"history": [], "level": "impossible"}).status_code == 400
+
     def test_non_string_history_rejected(self, client):
         for bad in ([123], [None], [{}], ["e2e4", 5]):
             r = client.post("/api/move", json={"history": bad, "difficulty": "easy"})
