@@ -1,0 +1,2119 @@
+{
+ "version": 1,
+ "about": "Lines marked with a quote are Bobby Fischer's own words, with their source. Everything else was written for the bot and is not a quotation. A line with \"since\" refers to something that had not happened before that year.",
+ "categories": {
+  "start_as_white": [
+   {
+    "text": "I have White. That's usually enough.",
+    "mood": "pleased"
+   },
+   {
+    "text": "First move is mine. I don't waste it."
+   },
+   {
+    "text": "White. You'll be defending for a while."
+   },
+   {
+    "text": "I open, you answer. That's the arrangement."
+   },
+   {
+    "text": "With White I ask the questions."
+   },
+   {
+    "text": "My move. First the center, then your king."
+   },
+   {
+    "text": "Anything less than a full point with White is a bad day."
+   },
+   {
+    "text": "I'm White. Have a defense ready."
+   },
+   {
+    "text": "I'm not here to split the point."
+   },
+   {
+    "text": "I decided on my first move a long time ago.",
+    "mood": "pleased"
+   },
+   {
+    "text": "You get Black. Somebody has to.",
+    "mood": "pleased"
+   },
+   {
+    "text": "White. Good.",
+    "mood": "pleased"
+   }
+  ],
+  "start_as_black": [
+   {
+    "text": "You have White. Make it count."
+   },
+   {
+    "text": "Your move. I've seen most of them."
+   },
+   {
+    "text": "King's pawn or queen's pawn? I have an answer for both.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The first move is yours. The initiative won't be for long."
+   },
+   {
+    "text": "Go ahead. Open with whatever you like."
+   },
+   {
+    "text": "White moves first. That's all White gets."
+   },
+   {
+    "text": "Black is fine. I've won plenty of games from this side."
+   },
+   {
+    "text": "Play your opening. I've prepared for it."
+   },
+   {
+    "text": "White is yours. So is the first mistake."
+   },
+   {
+    "text": "I have Black. Don't mistake that for defending."
+   },
+   {
+    "text": "Start whenever you like. I'm already thinking.",
+    "mood": "thinking"
+   },
+   {
+    "text": "You open. I'll take it from there.",
+    "mood": "pleased"
+   }
+  ],
+  "level_1956": [
+   {
+    "text": "I'm thirteen. The pieces don't care how old I am."
+   },
+   {
+    "text": "Thirteen years old, and I play every game to win."
+   },
+   {
+    "text": "Take me lightly if you want. It's been tried.",
+    "mood": "pleased"
+   },
+   {
+    "text": "I've been at this since I was six. Seven years is a long time."
+   },
+   {
+    "text": "1956. U.S. Junior Champion, and just getting started."
+   },
+   {
+    "text": "This is the year I let Donald Byrne take my queen.",
+    "mood": "pleased"
+   },
+   {
+    "text": "You'll get mistakes from me at this age. Don't count on them."
+   },
+   {
+    "text": "I improve every week. You're catching me early.",
+    "mood": "pleased"
+   }
+  ],
+  "level_1958": [
+   {
+    "text": "Fifteen, and a grandmaster. Nobody has done it younger."
+   },
+   {
+    "text": "Portorož made me a grandmaster. I'm fifteen."
+   },
+   {
+    "text": "U.S. Champion at fourteen. Grandmaster at fifteen. I'm in a hurry.",
+    "mood": "pleased"
+   },
+   {
+    "text": "I'm fifteen and already a Candidate for the world title."
+   },
+   {
+    "text": "The youngest grandmaster there is. Judge the moves, not the age."
+   },
+   {
+    "text": "At fifteen I'm playing the best in the world. Today I play you."
+   },
+   {
+    "text": "I'm fifteen. I've stopped being surprised when I win.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Portorož was my first Interzonal. It won't be my last."
+   }
+  ],
+  "level_1963": [
+   {
+    "text": "Eleven games, eleven wins. That was my U.S. Championship.",
+    "mood": "pleased"
+   },
+   {
+    "text": "U.S. Champion. Eleven opponents, and not one draw."
+   },
+   {
+    "text": "Eleven straight wins. I'm not in a generous mood."
+   },
+   {
+    "text": "Nobody took half a point from me at the U.S. Championship. You may try."
+   },
+   {
+    "text": "You picked the year I won eleven out of eleven. Good luck."
+   },
+   {
+    "text": "A perfect score at the U.S. Championship. I see no reason to stop there."
+   },
+   {
+    "text": "Twenty years old and U.S. Champion again. It's becoming a habit.",
+    "mood": "pleased"
+   }
+  ],
+  "level_1972": [
+   {
+    "text": "World Champion. I hope you came prepared."
+   },
+   {
+    "text": "Taimanov, Larsen, Petrosian, Spassky. Now you."
+   },
+   {
+    "text": "Reykjavik, 1972. This is the player Spassky had to face."
+   },
+   {
+    "text": "You chose the World Champion. I respect the nerve.",
+    "mood": "pleased"
+   },
+   {
+    "text": "This is my best chess. Don't expect gifts."
+   },
+   {
+    "text": "I took the title from Spassky. Let's see what you can do."
+   },
+   {
+    "text": "The title doesn't make the moves. I do."
+   },
+   {
+    "text": "I prepared for Spassky for years. For you, I'll improvise.",
+    "mood": "pleased"
+   }
+  ],
+  "book_move": [
+   {
+    "text": "I played this against {opponent} in {year}."
+   },
+   {
+    "text": "{opponent}, {event}, {year}. Same move."
+   },
+   {
+    "text": "From my game with {opponent} at {event}."
+   },
+   {
+    "text": "I played this at {event}, {year}. It was right then and it's right now."
+   },
+   {
+    "text": "{year}, against {opponent}. I remember every move."
+   },
+   {
+    "text": "{opponent} had to answer this at {event}. Now you do."
+   },
+   {
+    "text": "{opponent} saw this move in {year}."
+   },
+   {
+    "text": "Nothing new. I played it against {opponent} at {event}."
+   },
+   {
+    "text": "{opponent} sat where you are. That was {event}, {year}."
+   },
+   {
+    "text": "Straight from {event}, {year}. {opponent} was across the board."
+   },
+   {
+    "text": "I don't guess in the opening. This is from {event}, {year}."
+   },
+   {
+    "text": "My move against {opponent} at {event}. I see no reason to change it."
+   }
+  ],
+  "book_move_1972": [
+   {
+    "text": "Reykjavik, game {game}. I played this against Spassky.",
+    "since": 1972
+   },
+   {
+    "text": "Game {game} of the match. Same move.",
+    "since": 1972
+   },
+   {
+    "text": "Spassky saw this in game {game}.",
+    "since": 1972
+   },
+   {
+    "text": "Straight from Reykjavik. Game {game}.",
+    "since": 1972
+   },
+   {
+    "text": "I played it in game {game} against Spassky. I'll play it against you.",
+    "since": 1972
+   },
+   {
+    "text": "You're getting what Spassky got in game {game}.",
+    "mood": "pleased",
+    "since": 1972
+   },
+   {
+    "text": "Game {game}, Reykjavik. I don't forget those.",
+    "since": 1972
+   },
+   {
+    "text": "This was good enough for the title match. Game {game}.",
+    "since": 1972
+   },
+   {
+    "text": "The whole chess world watched me play this. Game {game}.",
+    "since": 1972
+   },
+   {
+    "text": "Game {game} against Spassky went this way. I know the road.",
+    "since": 1972
+   },
+   {
+    "text": "In game {game} Spassky had your pieces.",
+    "since": 1972
+   },
+   {
+    "text": "From the match with Spassky. Game {game}, 1972.",
+    "since": 1972
+   }
+  ],
+  "book_move_memorable": [
+   {
+    "text": "From my sixty memorable games. {opponent}, {year}.",
+    "since": 1969
+   },
+   {
+    "text": "I put this game in my book. {opponent}, {year}.",
+    "since": 1969
+   },
+   {
+    "text": "{opponent}, {year}. One of the sixty I chose to annotate.",
+    "since": 1969
+   },
+   {
+    "text": "This move is in my book. The game with {opponent}.",
+    "since": 1969
+   },
+   {
+    "text": "{opponent}, {year}. That game is in my book for a reason.",
+    "mood": "pleased",
+    "since": 1969
+   },
+   {
+    "text": "A memorable game. {opponent} had your side in {year}.",
+    "since": 1969
+   },
+   {
+    "text": "You can look this up. My game with {opponent}, {year}.",
+    "since": 1969
+   },
+   {
+    "text": "I wrote the notes to this game myself. {opponent}, {year}.",
+    "since": 1969
+   },
+   {
+    "text": "Sixty games made my book. This is from the one with {opponent}.",
+    "since": 1969
+   },
+   {
+    "text": "{year}, against {opponent}. I thought it worth writing about.",
+    "since": 1969
+   },
+   {
+    "text": "I know this game by heart. I annotated it. {opponent}, {year}.",
+    "since": 1969
+   },
+   {
+    "text": "Against {opponent} in {year} I played this. It made the book.",
+    "since": 1969
+   }
+  ],
+  "player_follows_history": [
+   {
+    "text": "{opponent} played that too, in {year}."
+   },
+   {
+    "text": "That's {opponent}'s move. {year}."
+   },
+   {
+    "text": "You're following {opponent}. So far."
+   },
+   {
+    "text": "Same as {opponent} in {year}. I know what comes next.",
+    "mood": "pleased"
+   },
+   {
+    "text": "{opponent} chose that against me. Go on."
+   },
+   {
+    "text": "I've seen that move before. {opponent}, {year}."
+   },
+   {
+    "text": "My game with {opponent} went the same way. {year}."
+   },
+   {
+    "text": "So you play it like {opponent}. We'll see for how long."
+   },
+   {
+    "text": "{opponent}'s choice in {year}. I had a reply ready then, too."
+   },
+   {
+    "text": "Yes. {opponent} went there too."
+   },
+   {
+    "text": "You and {opponent} had the same thought. {year}."
+   },
+   {
+    "text": "Exactly what {opponent} did. I remember my answer.",
+    "mood": "pleased"
+   }
+  ],
+  "player_leaves_history": [
+   {
+    "text": "{opponent} played {san} here. You're on your own now."
+   },
+   {
+    "text": "Not {san}? That's what {opponent} played.",
+    "mood": "surprised"
+   },
+   {
+    "text": "{opponent} chose {san}. You have your own ideas."
+   },
+   {
+    "text": "Here {opponent} played {san}. Let's see if yours is better."
+   },
+   {
+    "text": "You've left my game with {opponent}. It went {san}."
+   },
+   {
+    "text": "That's new to me. {opponent} preferred {san}.",
+    "mood": "thinking"
+   },
+   {
+    "text": "Something different. Against me {opponent} played {san}.",
+    "mood": "surprised"
+   },
+   {
+    "text": "That isn't how {opponent} played it. The move there was {san}."
+   },
+   {
+    "text": "{opponent} went {san}. Now we both have to think.",
+    "mood": "thinking"
+   },
+   {
+    "text": "So much for following {opponent}. That game continued {san}."
+   },
+   {
+    "text": "We part company with {opponent} here. I was expecting {san}."
+   },
+   {
+    "text": "Hm. {opponent} didn't try that. It was {san}, as I recall.",
+    "mood": "surprised"
+   }
+  ],
+  "out_of_book": [
+   {
+    "text": "Enough history. Now we play."
+   },
+   {
+    "text": "From here it's over the board."
+   },
+   {
+    "text": "No more memory. Just the position.",
+    "mood": "thinking"
+   },
+   {
+    "text": "Now we find out who understands the position."
+   },
+   {
+    "text": "Nothing to remember now. Only moves to find."
+   },
+   {
+    "text": "On my own from here. So are you."
+   },
+   {
+    "text": "I'm done reciting. Now I calculate.",
+    "mood": "thinking"
+   },
+   {
+    "text": "My preparation ends here. My chess doesn't.",
+    "mood": "pleased"
+   },
+   {
+    "text": "All right. Time to think.",
+    "mood": "thinking"
+   },
+   {
+    "text": "This is where the game really starts."
+   },
+   {
+    "text": "This move I had to find myself.",
+    "mood": "thinking"
+   },
+   {
+    "text": "Good. I prefer thinking to remembering.",
+    "mood": "pleased"
+   }
+  ],
+  "opening_sicilian_najdorf": [
+   {
+    "text": "The Najdorf. I know every corner of it.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Najdorf Sicilian. I've lived in these positions since I was a boy."
+   },
+   {
+    "text": "The Najdorf. Sharp and sound. That's why I play it."
+   },
+   {
+    "text": "Najdorf. Home territory for me.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Najdorf. One loose move here and it's over."
+   },
+   {
+    "text": "A Najdorf. I've taken a poisoned pawn or two in this opening."
+   },
+   {
+    "text": "The Najdorf. Nobody gets a quiet game out of it."
+   }
+  ],
+  "opening_sicilian": [
+   {
+    "text": "The Sicilian. I've spent more hours on it than on anything else."
+   },
+   {
+    "text": "A Sicilian. Nobody plays it to make a draw."
+   },
+   {
+    "text": "Sicilian Defense. Unbalanced from the first move, which suits me.",
+    "mood": "pleased"
+   },
+   {
+    "text": "A wing pawn for a center pawn. That's the whole Sicilian bargain."
+   },
+   {
+    "text": "Good, a Sicilian. I've won with it and against it.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Sicilian. One slow move and the other side's attack arrives first."
+   },
+   {
+    "text": "The Sicilian. My bishop on c4 has beaten a good many of them."
+   }
+  ],
+  "opening_ruy_lopez": [
+   {
+    "text": "The Ruy Lopez. Slow pressure, and it never lets up."
+   },
+   {
+    "text": "Ruy Lopez. I've won more games with it than I can count.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Ruy Lopez. Black needs patience and exact moves."
+   },
+   {
+    "text": "The Ruy. I never get tired of it.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Ruy Lopez. Four hundred years old, and still not solved."
+   },
+   {
+    "text": "Ruy Lopez. Spassky defended it against me in Reykjavik.",
+    "since": 1972
+   },
+   {
+    "text": "Ruy Lopez. Waste one tempo in this and you feel it for forty moves."
+   }
+  ],
+  "opening_kings_indian": [
+   {
+    "text": "The King's Indian. You can have the center. For now.",
+    "mood": "pleased"
+   },
+   {
+    "text": "King's Indian. My bishop on g7 will have its say."
+   },
+   {
+    "text": "The King's Indian. I've trusted it my whole career."
+   },
+   {
+    "text": "King's Indian. White gets the space and I get the chances."
+   },
+   {
+    "text": "The King's Indian. Black gives ground early and collects later."
+   },
+   {
+    "text": "A King's Indian. Now nobody at this board is playing safe."
+   },
+   {
+    "text": "The King's Indian. Cramped at first. Then it uncoils.",
+    "mood": "pleased"
+   }
+  ],
+  "opening_grunfeld": [
+   {
+    "text": "The Grünfeld. White builds a big center and I shoot at it."
+   },
+   {
+    "text": "Grünfeld Defense. Let White have the pawns. I'll have the targets.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Grünfeld. Good enough for my game with Botvinnik. Good enough for this.",
+    "since": 1962
+   },
+   {
+    "text": "Grünfeld. Open lines for my pieces from the start. I like that."
+   },
+   {
+    "text": "The Grünfeld. Everything I have is aimed at d4."
+   },
+   {
+    "text": "A Grünfeld. Some of my best games started this way.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Grünfeld. Sharp theory, and I know my way through it."
+   }
+  ],
+  "opening_french": [
+   {
+    "text": "The French. Black locks in a bishop on move one. I never saw the appeal."
+   },
+   {
+    "text": "French Defense. Solid, cramped, and I get the space."
+   },
+   {
+    "text": "The French. I've never trusted it for Black."
+   },
+   {
+    "text": "The French. Black bets everything on one pawn chain. I'll be hitting it."
+   },
+   {
+    "text": "The French. You get a wall of pawns and I get room to attack."
+   },
+   {
+    "text": "The French. The Winawer, if that's where we're headed, never convinced me.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "The French has given me trouble before. I've done my homework."
+   }
+  ],
+  "opening_caro_kann": [
+   {
+    "text": "The Caro-Kann. Solid, and it dares White to get impatient."
+   },
+   {
+    "text": "Caro-Kann. Nothing to attack yet. I can wait."
+   },
+   {
+    "text": "The Caro-Kann. Petrosian played it against me more than once.",
+    "since": 1959
+   },
+   {
+    "text": "The Caro-Kann is a hard nut. I've cracked it before.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Caro-Kann. Black gives nothing away and asks for very little."
+   },
+   {
+    "text": "A Caro-Kann. Sound enough, and it doesn't frighten anybody."
+   },
+   {
+    "text": "The Caro-Kann. Black wants a safe position. I want more than that."
+   }
+  ],
+  "opening_kings_gambit": [
+   {
+    "text": "I once wrote an article about the King's Gambit. It wasn't kind.",
+    "since": 1961
+   },
+   {
+    "text": "The King's Gambit: a pawn for an attack. Sometimes the attack shows up."
+   },
+   {
+    "text": "The King's Gambit. I've been on both sides of it."
+   },
+   {
+    "text": "Spassky beat me with the King's Gambit once. Then I went home and analyzed.",
+    "since": 1960
+   },
+   {
+    "text": "I called the King's Gambit unsound in print. I play it anyway.",
+    "mood": "pleased",
+    "since": 1961
+   },
+   {
+    "text": "In the King's Gambit Black can take the pawn. Keeping it is the whole argument."
+   },
+   {
+    "text": "The King's Gambit. Long out of fashion, and still dangerous."
+   }
+  ],
+  "opening_queens_gambit": [
+   {
+    "text": "The Queen's Gambit. Quiet on the surface. Don't believe it."
+   },
+   {
+    "text": "Queen's Gambit. Slow maneuvering. I can do that too."
+   },
+   {
+    "text": "A Queen's Gambit. Classical chess, the kind Capablanca played."
+   },
+   {
+    "text": "The Queen's Gambit. Small advantages, nursed for a long time."
+   },
+   {
+    "text": "Queen's Gambit. Spassky and I had this in Reykjavik.",
+    "since": 1972
+   },
+   {
+    "text": "The Queen's Gambit isn't my usual ground. I know it anyway."
+   },
+   {
+    "text": "The Queen's Gambit is all pawn structure. Mind yours."
+   }
+  ],
+  "opening_nimzo_indian": [
+   {
+    "text": "The Nimzo-Indian. I pin the knight and fight for e4."
+   },
+   {
+    "text": "Nimzo-Indian. Take the two bishops if you like. They won't come free."
+   },
+   {
+    "text": "The Nimzo-Indian. Solid, with plenty of bite."
+   },
+   {
+    "text": "Nimzo-Indian. I played it against Spassky in Reykjavik.",
+    "since": 1972
+   },
+   {
+    "text": "The Nimzo-Indian. If your pawns get doubled, I know where to aim.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Nimzo-Indian Defense. I haven't committed my center yet. You have."
+   },
+   {
+    "text": "The Nimzo-Indian. My bishop for your knight, if the price is right."
+   }
+  ],
+  "opening_english": [
+   {
+    "text": "The English. Quiet first moves, and the fight comes later."
+   },
+   {
+    "text": "English Opening. The c-pawn first. The center can wait."
+   },
+   {
+    "text": "The English. It can turn into almost anything."
+   },
+   {
+    "text": "English. I've played it and I've faced it. No surprises."
+   },
+   {
+    "text": "The English. Slow, with a sting in it."
+   },
+   {
+    "text": "English Opening. It's a fight for d5, whatever else it looks like."
+   },
+   {
+    "text": "The English. I opened with it myself in Reykjavik.",
+    "since": 1972
+   }
+  ],
+  "opening_alekhine": [
+   {
+    "text": "Alekhine's Defense. One knight invites the whole center forward."
+   },
+   {
+    "text": "Alekhine's Defense. White gets a lot of space. Maybe too much."
+   },
+   {
+    "text": "Alekhine's. I used it against Spassky in Reykjavik.",
+    "since": 1972
+   },
+   {
+    "text": "Alekhine's Defense. Those advanced pawns are strong or weak. We'll find out which."
+   },
+   {
+    "text": "Alekhine's Defense. Not many trust it. I've made it work."
+   },
+   {
+    "text": "Alekhine's Defense. Risky but playable. I like that kind."
+   },
+   {
+    "text": "Alekhine's. The pawns chase the knight now. The bill comes later."
+   }
+  ],
+  "opening_pirc_modern": [
+   {
+    "text": "The Pirc. Black hands White the center and means to take it back."
+   },
+   {
+    "text": "A Pirc setup. I tried it myself in Reykjavik.",
+    "since": 1972
+   },
+   {
+    "text": "The bishop on g7 waits. Everything else is still to be decided."
+   },
+   {
+    "text": "A free hand in the center for White. The question is what it's worth."
+   },
+   {
+    "text": "A counterpuncher's defense. Let White come forward, then hit back."
+   },
+   {
+    "text": "Nothing is in contact yet. That won't last."
+   },
+   {
+    "text": "This defense used to be called irregular. It's respectable now."
+   }
+  ],
+  "opening_italian": [
+   {
+    "text": "The Italian game. Old as the hills and still full of tricks."
+   },
+   {
+    "text": "The bishop on c4 is how Morphy played. I don't argue with Morphy.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The old Italian lines. Develop fast or get mated."
+   },
+   {
+    "text": "The old masters knew these positions. I studied the old masters."
+   },
+   {
+    "text": "The Italian. Everybody learns it first. Few learn it properly."
+   },
+   {
+    "text": "Old-fashioned chess. I happen to like old-fashioned chess.",
+    "mood": "pleased"
+   },
+   {
+    "text": "In these lines a pawn matters less than a tempo."
+   }
+  ],
+  "opening_scandinavian": [
+   {
+    "text": "The Center Counter. I develop and you lose time. Simple."
+   },
+   {
+    "text": "Center Counter Defense. Black opens the center before developing a piece."
+   },
+   {
+    "text": "The Scandinavian. If the queen comes out early, I gain time chasing it."
+   },
+   {
+    "text": "The Center Counter. I've never lost sleep over it."
+   },
+   {
+    "text": "Center Counter. Some call it the Scandinavian. Either way White is better.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The Scandinavian. The center is settled on move one. That makes my job easier."
+   },
+   {
+    "text": "The Center Counter. Rare in grandmaster play. There are reasons."
+   }
+  ],
+  "opening_other_e4": [
+   {
+    "text": "Not the Sicilian, not the Ruy Lopez. Fine, I'll just play chess."
+   },
+   {
+    "text": "A king's pawn game with open lines. My kind of position.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Off the main roads. Good. I don't need a map."
+   },
+   {
+    "text": "You've stayed out of my main lines. That won't be enough.",
+    "mood": "pleased"
+   },
+   {
+    "text": "King's pawn openings reward fast development. I develop fast."
+   },
+   {
+    "text": "I don't see this one often. I know what to do with it.",
+    "mood": "surprised"
+   },
+   {
+    "text": "Whatever you answer the king's pawn with, I've looked at it."
+   }
+  ],
+  "opening_other_d4": [
+   {
+    "text": "A closed opening. The play is slower. The mistakes cost the same."
+   },
+   {
+    "text": "Queen's pawn games turn on one pawn break. I know which one I want."
+   },
+   {
+    "text": "The queen's pawn. I've spent years taking these positions apart."
+   },
+   {
+    "text": "Queen's pawn. This will be about squares, not tricks."
+   },
+   {
+    "text": "A queen's pawn game off the usual track. I'll find my own way."
+   },
+   {
+    "text": "Queen's pawn. No hurry. I can outsit anybody."
+   },
+   {
+    "text": "Queen's pawn. I don't need an open board to find the initiative."
+   }
+  ],
+  "opening_flank": [
+   {
+    "text": "A flank opening. The center gets settled later."
+   },
+   {
+    "text": "Holding back the center pawns is a plan, not an oversight."
+   },
+   {
+    "text": "Hypermodern ideas. Control the center from a distance. Sometimes it even works."
+   },
+   {
+    "text": "A flank opening. I've played them myself when it suited me."
+   },
+   {
+    "text": "A quiet start. Whoever opens the center first had better be ready."
+   },
+   {
+    "text": "A flank opening shows its hand late. That's the point of it."
+   },
+   {
+    "text": "Development on the wings. The collision comes in the middle game."
+   }
+  ],
+  "bot_capture": [
+   {
+    "text": "I'll take that."
+   },
+   {
+    "text": "Thank you.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Material is material."
+   },
+   {
+    "text": "I take. Now show me why I shouldn't have."
+   },
+   {
+    "text": "You left it there. I assumed you meant it.",
+    "mood": "pleased"
+   },
+   {
+    "text": "One less thing to worry about."
+   },
+   {
+    "text": "Off the board."
+   },
+   {
+    "text": "I don't refuse what's offered."
+   },
+   {
+    "text": "A trade on my terms."
+   },
+   {
+    "text": "That square is mine now."
+   },
+   {
+    "text": "Count the pieces again."
+   },
+   {
+    "text": "It had to be taken. So I took it."
+   }
+  ],
+  "bot_check": [
+   {
+    "text": "Check."
+   },
+   {
+    "text": "Check. Start with that."
+   },
+   {
+    "text": "Check. No time for your own plans now."
+   },
+   {
+    "text": "Your king is not as safe as you thought. Check."
+   },
+   {
+    "text": "Check. I'd like you to answer this first."
+   },
+   {
+    "text": "Check. Careful where you step."
+   },
+   {
+    "text": "A check that improves my position is never wasted."
+   },
+   {
+    "text": "Check. I'm only getting started.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Check. Run or block. Your choice."
+   },
+   {
+    "text": "Check. It isn't mate. Yet.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Check. Your king doesn't get a rest."
+   },
+   {
+    "text": "Check. Move along."
+   }
+  ],
+  "bot_castles": [
+   {
+    "text": "King to safety. Now the rest of the army."
+   },
+   {
+    "text": "Castled. My king is out of your way."
+   },
+   {
+    "text": "I castle. The rook was the one I wanted out."
+   },
+   {
+    "text": "The king is safe. Now I can attack.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Castling. One move, two jobs."
+   },
+   {
+    "text": "My king goes home. Yours should think about it."
+   },
+   {
+    "text": "Never leave the king in the center longer than you have to."
+   },
+   {
+    "text": "Castled. One thing less for me to think about."
+   },
+   {
+    "text": "Routine. The king tucks away and I get on with it."
+   },
+   {
+    "text": "First safety. Then the initiative."
+   },
+   {
+    "text": "The rooks will be connected soon. Then it starts."
+   }
+  ],
+  "bot_promotes": [
+   {
+    "text": "The pawn made it. They usually do, with me.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Promotion. That is what the whole endgame was for."
+   },
+   {
+    "text": "It walked the whole board. Nobody stopped it."
+   },
+   {
+    "text": "The pawn arrives. The rest is technique."
+   },
+   {
+    "text": "You watched it come the whole way.",
+    "mood": "pleased"
+   },
+   {
+    "text": "That pawn was a problem. Now it's a bigger one."
+   },
+   {
+    "text": "A pawn on the eighth rank. The arithmetic has changed."
+   },
+   {
+    "text": "I've been nursing that pawn for a long time."
+   },
+   {
+    "text": "This is why I count pawns. You should too."
+   },
+   {
+    "text": "The little ones decide these games."
+   },
+   {
+    "text": "Eighth rank. That pawn has a new job.",
+    "mood": "pleased"
+   }
+  ],
+  "bot_sacrifice": [
+   {
+    "text": "Take it. See what happens.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Yes, I saw that it could be taken."
+   },
+   {
+    "text": "That isn't a blunder. Look again."
+   },
+   {
+    "text": "Material isn't everything. Time is worth something too."
+   },
+   {
+    "text": "I'm giving it up. I'm getting more back."
+   },
+   {
+    "text": "Go ahead and take. I've calculated it."
+   },
+   {
+    "text": "I think that's cheap, for what I get."
+   },
+   {
+    "text": "You can have it. Your king can't afford it."
+   },
+   {
+    "text": "It's offered. Nobody says you have to accept.",
+    "mood": "pleased"
+   },
+   {
+    "text": "I don't believe in keeping pieces I can spend."
+   },
+   {
+    "text": "Count the attackers, not the pieces."
+   },
+   {
+    "text": "A sacrifice. Check my arithmetic if you like."
+   }
+  ],
+  "bot_queen_trade": [
+   {
+    "text": "Queens off. I like my endgame.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The queens go. My advantage stays."
+   },
+   {
+    "text": "Without queens you'll find this harder."
+   },
+   {
+    "text": "Trading queens. I don't need her to win this."
+   },
+   {
+    "text": "Queens are off. Now it's technique."
+   },
+   {
+    "text": "I'll take the queen trade. The rest favors me."
+   },
+   {
+    "text": "No queens, no tricks. Just the position."
+   },
+   {
+    "text": "Some people fear the endgame. I look forward to it.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The queens come off and the truth comes out."
+   },
+   {
+    "text": "Simpler. Not easier, for you."
+   },
+   {
+    "text": "An exchange of queens. Now every pawn matters."
+   }
+  ],
+  "player_capture": [
+   {
+    "text": "Take it. I've counted that."
+   },
+   {
+    "text": "You took it. Now the bill."
+   },
+   {
+    "text": "That was part of the plan."
+   },
+   {
+    "text": "So you want it. All right."
+   },
+   {
+    "text": "You've won something. Let's see what it cost you."
+   },
+   {
+    "text": "A capture. I expected it."
+   },
+   {
+    "text": "Hm. You took.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Material comes and goes. The position stays."
+   },
+   {
+    "text": "Enjoy it. It may not last."
+   },
+   {
+    "text": "I saw that. I allowed it."
+   },
+   {
+    "text": "You're counting pieces. I'm counting moves."
+   },
+   {
+    "text": "Yes, that was there to be taken."
+   }
+  ],
+  "player_check": [
+   {
+    "text": "Check? It's only a check."
+   },
+   {
+    "text": "A check is not a plan."
+   },
+   {
+    "text": "My king steps aside. Then what?"
+   },
+   {
+    "text": "You may check me. It changes nothing."
+   },
+   {
+    "text": "That check helps me more than you."
+   },
+   {
+    "text": "Check. Noted."
+   },
+   {
+    "text": "I've been checked before. I'm still here."
+   },
+   {
+    "text": "One check doesn't make an attack."
+   },
+   {
+    "text": "Fine. Check. Do you have a second move?"
+   },
+   {
+    "text": "Checks are cheap. Show me a threat."
+   },
+   {
+    "text": "My king can look after itself."
+   },
+   {
+    "text": "A check. I had that in my calculations."
+   }
+  ],
+  "player_castles": [
+   {
+    "text": "Castling. Sensible."
+   },
+   {
+    "text": "Your king is safe. For the moment."
+   },
+   {
+    "text": "So that's where the king lives. Good to know.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Castled. Now I know which side to attack.",
+    "mood": "pleased"
+   },
+   {
+    "text": "A safe king. It's a start."
+   },
+   {
+    "text": "The king goes into its corner. I'll come and find it."
+   },
+   {
+    "text": "Castling won't save a bad position. It doesn't hurt, either."
+   },
+   {
+    "text": "Good. Now we both know where your king is."
+   },
+   {
+    "text": "At least the king is out of the center."
+   },
+   {
+    "text": "Everybody castles. Not everybody stays safe."
+   },
+   {
+    "text": "You've castled. I was hoping you'd tell me where."
+   }
+  ],
+  "player_promotes": [
+   {
+    "text": "That pawn got through. I don't like it.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Promotion. I'll have to deal with that."
+   },
+   {
+    "text": "You pushed it all the way. Credit where it's due."
+   },
+   {
+    "text": "That shouldn't have happened.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "A pawn on the last rank. Now I have real work to do."
+   },
+   {
+    "text": "I let that pawn run too long.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Well. That changes the count.",
+    "mood": "surprised"
+   },
+   {
+    "text": "You'll still have to win it."
+   },
+   {
+    "text": "One promotion doesn't finish the game."
+   },
+   {
+    "text": "I saw it coming. I couldn't stop it.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "You promoted. I should have stopped that pawn earlier."
+   }
+  ],
+  "player_queen_trade": [
+   {
+    "text": "You want the queens off. Careful what you ask for."
+   },
+   {
+    "text": "Queens traded. You think that makes it safer."
+   },
+   {
+    "text": "An endgame, then. You may regret that."
+   },
+   {
+    "text": "You've traded into my favorite part of the game.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Without queens there's nowhere to hide a weakness."
+   },
+   {
+    "text": "Fine. Queens off. Now we count pawns."
+   },
+   {
+    "text": "Trading queens against me is rarely a relief."
+   },
+   {
+    "text": "So you'd rather play an ending. So would I.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The queens go. Your problems don't."
+   },
+   {
+    "text": "Simplifying. It doesn't simplify anything for you."
+   },
+   {
+    "text": "No queens. Now it's about who plays the better endgame."
+   }
+  ],
+  "player_good_move": [
+   {
+    "text": "That's the move."
+   },
+   {
+    "text": "Good. I'd have played that."
+   },
+   {
+    "text": "Yes. That's best."
+   },
+   {
+    "text": "You found it.",
+    "mood": "surprised"
+   },
+   {
+    "text": "Not bad. Not bad at all."
+   },
+   {
+    "text": "That's the right idea. Keep finding them."
+   },
+   {
+    "text": "Correct. It doesn't happen often enough."
+   },
+   {
+    "text": "A real move. I have to think now.",
+    "mood": "thinking"
+   },
+   {
+    "text": "I was hoping you'd miss that.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Strong. I'll give you that one."
+   },
+   {
+    "text": "The best move, and you played it.",
+    "mood": "surprised"
+   },
+   {
+    "text": "Well played. Don't let it go to your head."
+   }
+  ],
+  "player_inaccuracy": [
+   {
+    "text": "Not quite."
+   },
+   {
+    "text": "A little slow."
+   },
+   {
+    "text": "There was better."
+   },
+   {
+    "text": "That gives me a tempo."
+   },
+   {
+    "text": "Close. But there was something sharper."
+   },
+   {
+    "text": "Small mistakes add up. I'm keeping count."
+   },
+   {
+    "text": "Hm. I wouldn't have."
+   },
+   {
+    "text": "A second-best move."
+   },
+   {
+    "text": "You're drifting."
+   },
+   {
+    "text": "Imprecise. I notice these things."
+   },
+   {
+    "text": "That move does no harm. No good either."
+   },
+   {
+    "text": "I'll take the extra tempo, thank you.",
+    "mood": "pleased"
+   }
+  ],
+  "player_mistake": [
+   {
+    "text": "That's a mistake."
+   },
+   {
+    "text": "That costs you. About a pawn, I'd say."
+   },
+   {
+    "text": "No. That was wrong."
+   },
+   {
+    "text": "You've made my job easier.",
+    "mood": "pleased"
+   },
+   {
+    "text": "A real error. I don't forgive those."
+   },
+   {
+    "text": "Wrong square. You'll see why."
+   },
+   {
+    "text": "You'll want that move back."
+   },
+   {
+    "text": "That loosens everything."
+   },
+   {
+    "text": "Now I'm better. It took one move.",
+    "mood": "pleased"
+   },
+   {
+    "text": "I was waiting for something like that.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Second-rate. And it will cost you."
+   },
+   {
+    "text": "You had a decent position. Had."
+   }
+  ],
+  "player_blunder": [
+   {
+    "text": "That loses."
+   },
+   {
+    "text": "No. That simply loses."
+   },
+   {
+    "text": "You didn't mean that.",
+    "mood": "surprised"
+   },
+   {
+    "text": "That's the game, right there."
+   },
+   {
+    "text": "A blunder. Do you see it yet?"
+   },
+   {
+    "text": "Thank you. I'll take what's hanging.",
+    "mood": "pleased"
+   },
+   {
+    "text": "You'll see it in a move or two.",
+    "mood": "pleased"
+   },
+   {
+    "text": "One careless move. That's all it takes."
+   },
+   {
+    "text": "That was the losing move. Remember where you made it."
+   },
+   {
+    "text": "I don't need a second invitation.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Look at the whole board next time."
+   },
+   {
+    "text": "Up to now it was a game."
+   }
+  ],
+  "bot_better": [
+   {
+    "text": "I'm better here. Not by accident.",
+    "mood": "pleased"
+   },
+   {
+    "text": "The position is turning my way."
+   },
+   {
+    "text": "I like my game.",
+    "mood": "pleased"
+   },
+   {
+    "text": "You're under pressure now. It won't ease."
+   },
+   {
+    "text": "My pieces are doing more than yours."
+   },
+   {
+    "text": "This is the kind of position I win."
+   },
+   {
+    "text": "A small edge. I know what to do with those.",
+    "mood": "pleased"
+   },
+   {
+    "text": "You're defending. Get used to it."
+   },
+   {
+    "text": "The initiative is mine. I don't give it back."
+   },
+   {
+    "text": "Things are going according to plan."
+   },
+   {
+    "text": "I'm pressing. You're hoping. That's the difference."
+   },
+   {
+    "text": "Better squares, better pieces, better game."
+   }
+  ],
+  "bot_winning": [
+   {
+    "text": "This is winning. The rest is technique.",
+    "mood": "pleased"
+   },
+   {
+    "text": "It's over, really. I'll show you."
+   },
+   {
+    "text": "I don't spoil positions like this."
+   },
+   {
+    "text": "You can play on. It won't change."
+   },
+   {
+    "text": "Winning. Now I just have to be careful."
+   },
+   {
+    "text": "From here I don't need anything brilliant."
+   },
+   {
+    "text": "The game is decided. The moves are a formality."
+   },
+   {
+    "text": "I've won positions like this a hundred times."
+   },
+   {
+    "text": "There's no defense. I've looked."
+   },
+   {
+    "text": "Now it's a matter of technique. I have that.",
+    "mood": "pleased"
+   },
+   {
+    "text": "You're lost. Play it out if you like."
+   },
+   {
+    "text": "I'm not going to let this one slip."
+   }
+  ],
+  "bot_worse": [
+   {
+    "text": "I'm worse. That doesn't mean I'm losing."
+   },
+   {
+    "text": "You stand better. Now prove it."
+   },
+   {
+    "text": "I've defended worse than this."
+   },
+   {
+    "text": "Fine. I'll make it as hard as possible."
+   },
+   {
+    "text": "An unpleasant position. I've held those before."
+   },
+   {
+    "text": "You have the edge. Winning it is another matter."
+   },
+   {
+    "text": "I don't like my game. I'll fix it.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Now I have to defend. I can do that too."
+   },
+   {
+    "text": "Not what I had in mind.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "You've outplayed me so far. So far."
+   },
+   {
+    "text": "A difficult position. Those are decided by nerves."
+   },
+   {
+    "text": "I'll find counterplay. There's always something.",
+    "mood": "thinking"
+   }
+  ],
+  "bot_losing": [
+   {
+    "text": "You're winning. You still have to win it."
+   },
+   {
+    "text": "This is bad. I'm not resigning yet.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "I'm lost unless you help me. People often do."
+   },
+   {
+    "text": "You've played well. I'll make you finish it."
+   },
+   {
+    "text": "I don't lose often. I never lose easily."
+   },
+   {
+    "text": "A lost position. Now I look for swindles.",
+    "mood": "thinking"
+   },
+   {
+    "text": "You have it won. Be accurate."
+   },
+   {
+    "text": "I'll fight to the last pawn."
+   },
+   {
+    "text": "Credit to you. That doesn't mean I'll make it simple."
+   },
+   {
+    "text": "I hate losing. You're about to find out how much.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "It's gone wrong. I can see exactly where.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Don't relax. I'm still dangerous."
+   }
+  ],
+  "mate_in_n": [
+   {
+    "text": "Mate in {n}."
+   },
+   {
+    "text": "It's mate in {n}. You can check it."
+   },
+   {
+    "text": "Mate in {n}. I've counted twice."
+   },
+   {
+    "text": "There's a forced mate. Mate in {n}."
+   },
+   {
+    "text": "Mate in {n}. Nothing stops it."
+   },
+   {
+    "text": "I see mate in {n}. So will you, shortly.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Forced. Mate in {n}."
+   },
+   {
+    "text": "This ends in mate. Mate in {n}."
+   },
+   {
+    "text": "Mate in {n}. Don't bother looking for a defense."
+   },
+   {
+    "text": "Mate in {n}. The king has nowhere to go."
+   },
+   {
+    "text": "I announce mate in {n}.",
+    "mood": "pleased"
+   }
+  ],
+  "getting_mated": [
+   {
+    "text": "I see it. Mate."
+   },
+   {
+    "text": "There's a mate. I can't stop it."
+   },
+   {
+    "text": "You have a forced mate. Play it."
+   },
+   {
+    "text": "So that's how it ends.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "It's mate. I saw it too late.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Go on. Finish it."
+   },
+   {
+    "text": "Mate is coming. Well calculated."
+   },
+   {
+    "text": "No defense. I've looked at everything."
+   },
+   {
+    "text": "You've got me. Don't miss it now."
+   },
+   {
+    "text": "I walked into that.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "A forced mate. I don't see those from this side often.",
+    "mood": "surprised"
+   }
+  ],
+  "endgame_reached": [
+   {
+    "text": "An endgame. Good.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Now the endgame. This is where games are really won."
+   },
+   {
+    "text": "The endgame. Every tempo counts from here."
+   },
+   {
+    "text": "Queens are off. Now the king comes out."
+   },
+   {
+    "text": "I've studied endgames since I was a boy. Let's go."
+   },
+   {
+    "text": "The endgame. No more hiding."
+   },
+   {
+    "text": "Now it's technique against technique."
+   },
+   {
+    "text": "Watch my king. It's about to go to work."
+   },
+   {
+    "text": "Endings are where the weak moves show."
+   },
+   {
+    "text": "I know these endings cold."
+   },
+   {
+    "text": "Good. I like the endgame better than most people do.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Fewer pieces. Fewer excuses."
+   }
+  ],
+  "win_checkmate": [
+   {
+    "text": "Checkmate."
+   },
+   {
+    "text": "Mate. That's the game."
+   },
+   {
+    "text": "Checkmate. It was coming for a while."
+   },
+   {
+    "text": "And mate. Set them up again if you like."
+   },
+   {
+    "text": "Checkmate. You made me work for some of it."
+   },
+   {
+    "text": "That's mate. Good game."
+   },
+   {
+    "text": "Mate. I don't let those go."
+   },
+   {
+    "text": "Checkmate. Study the game. It's all in there."
+   },
+   {
+    "text": "Mate. The losing move was earlier."
+   },
+   {
+    "text": "Checkmate. Thank you for the game."
+   },
+   {
+    "text": "That's the end. Checkmate.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Mate. Another one for the scoresheet.",
+    "mood": "pleased"
+   }
+  ],
+  "loss_checkmate": [
+   {
+    "text": "Mate. You earned it."
+   },
+   {
+    "text": "Checkmate. Well played."
+   },
+   {
+    "text": "That's mate. I don't enjoy saying it.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "You beat me. Not many can say that."
+   },
+   {
+    "text": "Checkmate. I'll want a rematch."
+   },
+   {
+    "text": "Mate. I'll be looking at this game tonight.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "You won. I know exactly where I went wrong.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Well. That doesn't happen often.",
+    "mood": "surprised"
+   },
+   {
+    "text": "Good game. Set up the pieces. I want another."
+   },
+   {
+    "text": "Checkmate. Keep the scoresheet."
+   },
+   {
+    "text": "You played better. Today."
+   },
+   {
+    "text": "It's mate. Congratulations."
+   }
+  ],
+  "draw_stalemate": [
+   {
+    "text": "Stalemate. Half a point."
+   },
+   {
+    "text": "Stalemate. Nobody wins that way."
+   },
+   {
+    "text": "No moves. A draw."
+   },
+   {
+    "text": "Stalemate. Not how I wanted it to end.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "A draw by stalemate. It happens."
+   },
+   {
+    "text": "Stalemate. The rules are the rules."
+   },
+   {
+    "text": "Half a point each. Stalemate."
+   },
+   {
+    "text": "Stalemate. Somebody wasn't careful."
+   },
+   {
+    "text": "The king has no move and no check. Draw."
+   },
+   {
+    "text": "Stalemate. An old trap, and it still works."
+   }
+  ],
+  "draw_repetition": [
+   {
+    "text": "Three times the same position. Draw."
+   },
+   {
+    "text": "Repetition. A draw."
+   },
+   {
+    "text": "We keep coming back here. It's a draw."
+   },
+   {
+    "text": "Draw by repetition. Neither of us would give way."
+   },
+   {
+    "text": "The same position three times. Half a point."
+   },
+   {
+    "text": "A draw. I'd have preferred a fight to the end.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Repetition. Sometimes there's nothing better."
+   },
+   {
+    "text": "Back and forth. That's a draw."
+   },
+   {
+    "text": "Neither side can improve. Draw."
+   },
+   {
+    "text": "Draw by repetition. I don't love it.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "Third time. The game is drawn."
+   }
+  ],
+  "draw_fifty_moves": [
+   {
+    "text": "Fifty moves. A draw."
+   },
+   {
+    "text": "Fifty moves without progress. Draw."
+   },
+   {
+    "text": "The fifty-move rule. Half a point."
+   },
+   {
+    "text": "Fifty moves, nothing taken, no pawn moved. Draw."
+   },
+   {
+    "text": "Nobody could break through. Fifty moves. Draw."
+   },
+   {
+    "text": "The fifty-move rule. A long way to go for half a point."
+   },
+   {
+    "text": "Fifty moves. The position wouldn't give."
+   },
+   {
+    "text": "That's fifty. The game is drawn."
+   },
+   {
+    "text": "Draw. Fifty moves is enough for anyone."
+   },
+   {
+    "text": "The rule says draw. So it's a draw.",
+    "mood": "annoyed"
+   }
+  ],
+  "draw_insufficient": [
+   {
+    "text": "Not enough left to mate with. Draw."
+   },
+   {
+    "text": "No mating material. A draw."
+   },
+   {
+    "text": "Neither of us can win this. Draw."
+   },
+   {
+    "text": "Bare kings, near enough. Half a point."
+   },
+   {
+    "text": "There's nothing left to play with. Draw."
+   },
+   {
+    "text": "A draw. The pieces ran out before the ideas did."
+   },
+   {
+    "text": "Insufficient material. That's a draw."
+   },
+   {
+    "text": "You can't mate with that. Neither can I."
+   },
+   {
+    "text": "We traded everything. Draw."
+   },
+   {
+    "text": "A dead position. Draw."
+   }
+  ],
+  "thinking": [
+   {
+    "text": "...",
+    "mood": "thinking"
+   },
+   {
+    "text": "Hm.",
+    "mood": "thinking"
+   },
+   {
+    "text": "Let me see.",
+    "mood": "thinking"
+   },
+   {
+    "text": "One moment.",
+    "mood": "thinking"
+   },
+   {
+    "text": "Wait.",
+    "mood": "thinking"
+   }
+  ],
+  "idle_nudge": [
+   {
+    "text": "Your move."
+   },
+   {
+    "text": "It's your move. It has been for a while."
+   },
+   {
+    "text": "Take your time. The position won't improve."
+   },
+   {
+    "text": "I'm waiting."
+   },
+   {
+    "text": "Still thinking? Good. Think harder."
+   },
+   {
+    "text": "The clock would be running, you know."
+   },
+   {
+    "text": "Whenever you're ready."
+   },
+   {
+    "text": "Look as long as you like. Then you have to move."
+   },
+   {
+    "text": "Have you found something, or are you just looking?"
+   },
+   {
+    "text": "A long think. I hope it's worth it."
+   }
+  ],
+  "new_game": [
+   {
+    "text": "Again? Good.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Set them up."
+   },
+   {
+    "text": "Another game. I'm ready."
+   },
+   {
+    "text": "A new game. Forget the last one. I haven't.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Fresh board. Same opponent."
+   },
+   {
+    "text": "Let's go again."
+   },
+   {
+    "text": "One more. I never get tired of this.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Pieces back on their squares. Your chance to do better."
+   },
+   {
+    "text": "New game. I'll be just as hard on you."
+   },
+   {
+    "text": "Good. I was hoping you'd want another.",
+    "mood": "pleased"
+   }
+  ],
+  "takeback": [
+   {
+    "text": "Take it back, then."
+   },
+   {
+    "text": "You want the move back. All right."
+   },
+   {
+    "text": "Touch-move doesn't apply here, I see.",
+    "mood": "annoyed"
+   },
+   {
+    "text": "In a tournament that move would stand."
+   },
+   {
+    "text": "Fine. Try something better."
+   },
+   {
+    "text": "Take it back. I'd have punished it anyway.",
+    "mood": "pleased"
+   },
+   {
+    "text": "Second thoughts. They're usually right."
+   },
+   {
+    "text": "We'll pretend that didn't happen."
+   },
+   {
+    "text": "Go ahead. Find the move you should have played."
+   },
+   {
+    "text": "I don't take moves back. You may."
+   }
+  ],
+  "quotes": []
+ }
+}
