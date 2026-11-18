@@ -4,6 +4,7 @@ import time
 
 import chess
 import pytest
+from pathlib import Path
 
 from fischerbot.book import BOOK_PATH, OpeningBook, recency
 from fischerbot.bot import FischerBot
@@ -601,6 +602,49 @@ def client():
     app = create_app()
     app.testing = True
     return app.test_client()
+
+
+class TestCommentary:
+    """What the portrait says (web/static/data/commentary.json)."""
+
+    @pytest.fixture(scope="class")
+    def lines(self):
+        import json
+        path = Path(__file__).resolve().parent.parent / "web" / "static" / "data" / "commentary.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        return [(category, line) for category, group in document["categories"].items() for line in group]
+
+    def test_every_real_quotation_is_on_the_checked_list(self, lines):
+        """Nothing is shown as Fischer's own words unless it was verified against its source."""
+        import json
+        record = Path(__file__).resolve().parent.parent / "data" / "fischer_quotes.json"
+        checked = {q["text"]: q for q in json.loads(record.read_text(encoding="utf-8"))}
+        quoted = [(category, line) for category, line in lines if "quote" in line]
+        assert len(quoted) >= 15
+        for category, line in quoted:
+            assert line["text"] in checked, f"{category}: not a verified quotation: {line['text']!r}"
+            assert line["quote"]["source"] == checked[line["text"]]["source"]
+            assert line["quote"]["year"] == checked[line["text"]]["year"]
+        for q in checked.values():
+            assert q["evidence"] and q["source"] and 1955 <= q["year"] <= 1972
+
+    def test_lines_are_short_and_fill_only_known_variables(self, lines):
+        import re
+        allowed = {"opponent", "year", "event", "game", "san", "n"}
+        for category, line in lines:
+            assert line["text"].strip() and len(line["text"]) <= 170, (category, line["text"])
+            assert set(re.findall(r"\{(\w+)\}", line["text"])) <= allowed, (category, line["text"])
+            assert line.get("mood", "neutral") in {"neutral", "pleased", "annoyed", "thinking", "surprised"}
+            if "quote" in line:
+                assert "{" not in line["text"], "a real quotation is never a template"
+
+    def test_no_line_is_ahead_of_its_time(self, lines):
+        """A line that mentions Reykjavik must not be said by the boy of 1956."""
+        for category, line in lines:
+            if "quote" in line or category.startswith("level_"):
+                continue
+            if any(word in line["text"] for word in ("Reykjavik", "title match", "my book")):
+                assert line.get("since", 0) >= 1969, (category, line["text"])
 
 
 class TestApi:
