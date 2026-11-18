@@ -41,6 +41,10 @@
 
 .cb, .cb *, .cb *::before, .cb *::after { box-sizing: border-box; }
 
+/* Movement is animated by board.js alone: no page-wide transition rule may
+   make a square or a piece lag behind the position. */
+.cb, .cb-grid, .cb-sq, .cb-piece, .cb-halo { transition-property: none; }
+
 /* While a piece is in the hand the board rises above its neighbours. */
 .cb--dragging { z-index: 1000; cursor: grabbing; }
 
@@ -54,7 +58,9 @@
   outline: none;
 }
 
-.cb-grid:focus-visible {
+/* The focus ring, in the site's gold - while the keyboard is in use (board.js
+   knows; :focus-visible cannot be trusted after a scripted focus()). */
+.cb--kbd .cb-grid:focus {
   outline: 3px solid var(--cb-gold-bright);
   outline-offset: 3px;
 }
@@ -88,13 +94,13 @@
   position: absolute;
   font-family: var(--cb-font);
   font-weight: 700;
-  font-size: clamp(8px, calc(var(--cb-sq-px) * 0.19), 15px);
+  font-size: clamp(8px, calc(var(--cb-sq-px) * 0.17), 14px);
   line-height: 1;
-  opacity: 0.86;
+  opacity: 0.9;
   pointer-events: none;
 }
-.cb-coord--rank { left: 7%; top: 7%; }
-.cb-coord--file { right: 8%; bottom: 6%; }
+.cb-coord--rank { left: 5%; top: 5%; }
+.cb-coord--file { right: 4%; bottom: 3%; }   /* the corner the pieces leave free */
 
 /* The move just played, and the piece in the hand. */
 .cb-sq--light.cb-sq--last { background-color: var(--cb-last-light); }
@@ -213,6 +219,45 @@
   filter: drop-shadow(0 calc(var(--cb-sq-px) * 0.12) calc(var(--cb-sq-px) * 0.1) rgba(10, 6, 2, 0.5));
 }
 
+/* ---------- the verdict on a move: a round badge on the corner of its square ---------- */
+
+.cb-badge {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12.5%;
+  height: 12.5%;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.cb-badge::after {
+  content: attr(data-glyph);
+  position: absolute;
+  top: 3%;
+  right: 3%;
+  width: 42%;
+  height: 42%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #c9372c;
+  color: #fff;
+  font: 700 calc(var(--cb-sq-px) * 0.23) / 1 var(--mono, ui-monospace, Consolas, monospace);
+  letter-spacing: -0.04em;
+  box-shadow: 0 0 0 calc(var(--cb-sq-px) * 0.022) rgba(255, 250, 240, 0.92), 0 calc(var(--cb-sq-px) * 0.03) calc(var(--cb-sq-px) * 0.07) rgba(10, 6, 2, 0.55);
+  animation: cb-badge-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cb-badge[data-kind="mistake"]::after { background: #d97a26; }
+.cb-badge[data-kind="inaccuracy"]::after { background: #d9a92a; color: #2b1d08; }
+.cb-badge[data-kind="good"]::after { background: #5c9a4a; }
+
+@keyframes cb-badge-in {
+  from { transform: scale(0.3); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 /* ---------- promotion picker ---------- */
 
 .cb-promo {
@@ -259,8 +304,10 @@
   transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .cb-promo-btn:hover { transform: scale(1.05); box-shadow: 0 0 0 2px var(--cb-gold); }
-.cb-promo-btn:focus-visible,
-.cb-promo-cancel:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--cb-gold-bright); }
+.cb-promo-btn:focus,
+.cb-promo-cancel:focus { outline: none; }
+.cb--kbd .cb-promo-btn:focus,
+.cb--kbd .cb-promo-cancel:focus { box-shadow: 0 0 0 3px var(--cb-gold-bright); }
 
 .cb-promo-art {
   display: block;
@@ -295,7 +342,7 @@
 /* ---------- less motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .cb-sq--check::before, .cb-promo { animation: none; }
+  .cb-sq--check::before, .cb-promo, .cb-badge::after { animation: none; }
   .cb-promo-btn { transition: none; }
   .cb-promo-btn:hover { transform: none; }
 }

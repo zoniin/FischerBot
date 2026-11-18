@@ -6,7 +6,7 @@
   <title>FischerBot &mdash; Chess against Bobby Fischer</title>
   <meta name="description" content="Play chess against a bot built from Bobby Fischer's own games: his openings, his style, and what he had to say about it.">
   <meta name="theme-color" content="#1c1916">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9816;</text></svg>">
+  <link rel="icon" type="image/png" href="/static/img/fischer-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500&display=swap" rel="stylesheet">
@@ -37,6 +37,7 @@
             <p class="opp-title" id="opp-title">&nbsp;</p>
             <p class="opp-meta" id="opp-meta">&nbsp;</p>
           </div>
+          <p class="opp-mate" id="opp-mate" role="status" hidden></p>
         </header>
 
         <div class="speech">
@@ -114,10 +115,10 @@
             <button type="button" class="step" id="rev-next" aria-label="One move forward">&rsaquo;</button>
             <button type="button" class="step" id="rev-last" aria-label="Latest position">&raquo;</button>
           </div>
-          <button type="button" class="tool review-live" id="rev-live" hidden>Back to the game</button>
+          <button type="button" class="tool" id="btn-pgn">Copy PGN</button>
         </div>
         <div class="sheet-foot">
-          <button type="button" class="tool" id="btn-pgn">Copy PGN</button>
+          <button type="button" class="tool review-live" id="rev-live" hidden>Back to the game</button>
           <span class="sheet-note" id="pgn-note" role="status"></span>
         </div>
       </section>
@@ -128,6 +129,7 @@
   <footer class="colophon">
     <p>The moves come from an opening book of Fischer&rsquo;s own games, a search engine running in your browser, and a style model trained on his play.
       Lines marked &ldquo;his own words&rdquo; are quotations with their source; everything else he says here was written for the bot.</p>
+    <p>Portrait: Fischer at the board, photo collection Anefo, Nationaal Archief (public domain), coloured for this page.</p>
   </footer>
 </div>
 
@@ -156,7 +158,7 @@
 
 <div class="veil veil-end" id="endcard" hidden>
   <div class="endcard" role="dialog" aria-modal="true" aria-labelledby="end-title" tabindex="-1">
-    <div class="end-art"><img src="/static/img/fischer-poster.svg" alt="Bobby Fischer" width="400" height="400"></div>
+    <div class="end-art"><img src="/static/img/fischer-wide.webp" alt="Bobby Fischer at the board" width="800" height="800"></div>
     <div class="end-body">
       <p class="eyebrow" id="end-kicker"></p>
       <h2 class="end-title" id="end-title"></h2>

@@ -119,13 +119,14 @@ export function bookCategory(game) {
  * @param {?object} args.playerMove  moveFacts of the human's move before it (null if he moves first)
  * @param {?string} args.playerUci   that move in UCI
  * @param {function(object): object} [args.gameVariables]  book game -> template variables
+ * @param {boolean} [args.opensGame]  this is the first move of a game from the usual starting position
  * @returns {{ events: object[], memory: object, verdict: ?string }}
  *   `events` in priority order for Commentator.pick; `memory` to keep for
  *   the next move; `verdict` is the judgement on the human's move.
  */
 export function eventsForBotMove({
   result, memory = newMemory(), botMove = {}, playerMove = null, playerUci = null,
-  gameVariables = () => ({}),
+  gameVariables = () => ({}), opensGame = false,
 }) {
   const events = [];
   const next = {
@@ -162,6 +163,8 @@ export function eventsForBotMove({
   // his own games
   const bookVars = gameVariables(game);
   const firstBookMove = fromBook && next.bookMoves === 0;
+  // 1.e4, "best by test": worth a word of its own, most of the time
+  if (opensGame && result.uci === 'e2e4') add('first_move_e4', 'often');
   if (firstBookMove) add(bookCategory(game), 'always', bookVars);
 
   const playerInHistory = context?.playerMove ?? null;

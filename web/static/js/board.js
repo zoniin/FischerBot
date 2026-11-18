@@ -3,6 +3,7 @@
 //   const board = new Board(rootElement, { pieceUrl, onMove });
 //   board.setPosition(position, { lastMove, animate });
 //   board.setOrientation(WHITE | BLACK);
+//   board.setBadge(square | null, { glyph: '??', kind: 'blunder', label: 'blunder' });
 //   board.setInteractive(WHITE | BLACK | null);
 //   board.destroy();
 //
@@ -219,6 +220,8 @@ export class Board {
     this._pos = null;             // our own copy of the position we were shown
     this._legal = [];
     this._lastMove = null;
+    this._badge = null;           // { square, glyph, kind, label }: a verdict shown on a square's corner
+    this._badgeEl = null;
     this._checkSq = null;
     this._pieces = new Array(64).fill(null);   // what is drawn: { el, code } per square
     this._shown = false;
@@ -274,6 +277,42 @@ export class Board {
     this._refresh();
   }
 
+  /**
+   * A small round badge on the corner of a square: the verdict on the move
+   * that landed there ("??", "?", "?!", "!"). `kind` (blunder | mistake |
+   * inaccuracy | good) picks its colour, `label` is what a screen reader hears
+   * with the square. Pass null to take the badge away. It never takes input.
+   */
+  setBadge(square, badge = null) {
+    if (this._dead) return;
+    const on = Number.isInteger(square) && square >= 0 && square < 64
+      && badge !== null && typeof badge === 'object' && typeof badge.glyph === 'string' && badge.glyph !== '';
+    const next = on
+      ? { square, glyph: badge.glyph.slice(0, 2), kind: String(badge.kind ?? ''), label: String(badge.label ?? badge.kind ?? '') }
+      : null;
+    const same = (a, b) => a === b || (a !== null && b !== null
+      && a.square === b.square && a.glyph === b.glyph && a.kind === b.kind && a.label === b.label);
+    if (same(this._badge, next)) return;
+    this._badge = next;
+    this._drawBadge();
+    this._refresh();
+  }
+
+  _drawBadge() {
+    if (this._badge === null) {
+      if (this._badgeEl !== null) { this._badgeEl.remove(); this._badgeEl = null; }
+      return;
+    }
+    if (this._badgeEl === null) {
+      this._badgeEl = this._el('div', 'cb-badge');
+      this._badgeEl.setAttribute('aria-hidden', 'true');       // the square's own name carries the verdict
+      this._wrap.append(this._badgeEl);
+    }
+    this._badgeEl.dataset.kind = this._badge.kind;
+    this._badgeEl.dataset.glyph = this._badge.glyph;
+    this._place(this._badgeEl, this._badge.square);
+  }
+
   /** WHITE or BLACK at the bottom. */
   setOrientation(color) {
     if (this._dead) return;
@@ -283,6 +322,7 @@ export class Board {
     this._orientation = orientation;
     this._assignCells();
     for (let sq = 0; sq < 64; sq++) if (this._pieces[sq]) this._put(this._pieces[sq].el, sq);
+    this._drawBadge();
     this._refresh();
   }
 
@@ -436,12 +476,14 @@ export class Board {
     const sq = snapSquareSize(available, dpr);
     if (!(sq > 0)) return;       // not laid out (hidden): the stylesheet's 100% stands in
     const size = sq * 8;
-    const snap = (v) => Math.round(v * dpr) / dpr;
+    // Centre it, landing on the device-pixel grid even when the host does not.
+    const rect = this._host.getBoundingClientRect();
+    const snap = (origin, v) => Math.round((origin + v) * dpr) / dpr - origin;
     const style = this._wrap.style;
     style.width = `${size}px`;
     style.height = `${size}px`;
-    style.left = `${snap(padL + (width - size) / 2)}px`;
-    style.top = `${snap(padT + (height - size) / 2)}px`;
+    style.left = `${snap(rect.left + px(cs.borderLeftWidth), padL + (width - size) / 2)}px`;
+    style.top = `${snap(rect.top + px(cs.borderTopWidth), padT + (height - size) / 2)}px`;
     style.setProperty('--cb-sq-px', `${sq}px`);
     this._sq = sq;
   }
@@ -591,6 +633,7 @@ export class Board {
       if (last && (sq === last.from || sq === last.to)) cls += ' cb-sq--last';
       if (sq === this._selected) cls += ' cb-sq--selected';
       if (sq === this._checkSq) { cls += ' cb-sq--check'; label += ', in check'; }
+      if (this._badge !== null && sq === this._badge.square && this._badge.label !== '') label += `, ${this._badge.label}`;
       const capture = this._targets.get(sq);
       if (capture !== undefined) {
         cls += capture ? ' cb-sq--ring' : ' cb-sq--dot';
@@ -1008,6 +1051,8 @@ export class Board {
     }
     if (next !== null) {
       e.preventDefault();
+      this._kbd = true;                        // show where the focus is from now on
+      this._wrap.classList.add('cb--kbd');
       picker.buttons[at < 0 ? 0 : (next + count) % count].focus({ preventScroll: true });
       return;
     }

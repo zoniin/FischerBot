@@ -106,6 +106,18 @@ test('the first book move is always announced, later ones only sometimes', () =>
   assert.equal(second.memory.bookMoves, 2);
 });
 
+test('1.e4 gets a word of its own, ahead of the citation, when he opens the game with it', () => {
+  const e4 = { uci: 'e2e4', san: 'e4', source: 'book', evalCp: null, pv: [], book: { game: CAREER, count: 300 }, context: null };
+  const opening = eventsForBotMove({ result: e4, memory: newMemory(), botMove: quiet, gameVariables, opensGame: true });
+  assert.deepEqual(categories(opening.events).slice(0, 2), ['first_move_e4', 'book_move']);
+  assert.equal(opening.events[0].frequency, 'often');
+  assert.equal(opening.events[1].frequency, 'always');
+  const later = eventsForBotMove({ result: e4, memory: newMemory(), botMove: quiet, gameVariables });
+  assert.ok(!categories(later.events).includes('first_move_e4'));
+  const d4 = eventsForBotMove({ result: { ...e4, uci: 'd2d4', san: 'd4' }, memory: newMemory(), botMove: quiet, gameVariables, opensGame: true });
+  assert.ok(!categories(d4.events).includes('first_move_e4'));
+});
+
 test('leaving his game, then leaving the book: both are said, in that order, once', () => {
   let memory = { ...newMemory(), bookMoves: 4, wasInBook: true };
   const result = { uci: 'g1f3', san: 'Nf3', source: 'search', evalCp: 25, pv: ['g1f3', 'g8f6'],

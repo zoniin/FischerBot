@@ -114,8 +114,8 @@ export class Chooser {
     const img = element('img');
     img.src = posterUrl;
     img.alt = '';
-    img.width = 400;
-    img.height = 400;
+    img.width = 800;
+    img.height = 800;
     img.decoding = 'async';
     const pips = element('span', 'level-pips');
     pips.setAttribute('aria-hidden', 'true');

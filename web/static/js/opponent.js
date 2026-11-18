@@ -43,6 +43,7 @@ export class Opponent {
   #restTimer = 0;
   #queueTimer = 0;
   #moodTimer = 0;
+  #dotsTimer = 0;
   #queued = null;
   #holdUntil = 0;
   #current = null;         // the line in the bubble (null: nothing, or the dots)
@@ -62,9 +63,13 @@ export class Opponent {
       ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
   }
 
-  /** Fetches the avatar and inlines it, so that its data-mood can change. Falls back to an <img>. */
+  /**
+   * Shows the portrait. A photograph is simply an <img>; an SVG drawing is
+   * fetched and inlined, so that a data-mood attribute on it can change.
+   */
   async loadPortrait(url) {
     try {
+      if (!/\.svg(\?|#|$)/i.test(url)) throw new Error('a raster image');
       const response = await fetch(url);
       if (!response.ok) throw new Error(String(response.status));
       const markup = await response.text();
@@ -123,13 +128,19 @@ export class Opponent {
     }
     this.#queued = null;
     window.clearTimeout(this.#queueTimer);
+    window.clearTimeout(this.#dotsTimer);
     this.#show(line, options);
   }
 
   /** Three quiet dots while he thinks - unless he has just said something that is still being read. */
   dots() {
+    window.clearTimeout(this.#dotsTimer);
     if (this.#queued !== null) return;
-    if (this.#current !== null && this.#bubble.dataset.state === 'open' && !this.#transient) return;
+    const wait = this.#holdUntil - performance.now();
+    if (this.#current !== null && !this.#transient && this.#bubble.dataset.state === 'open' && wait > 0) {
+      this.#dotsTimer = window.setTimeout(() => this.dots(), wait);   // let the line be read first
+      return;
+    }
     this.#stopTyping();
     window.clearTimeout(this.#restTimer);
     this.#transient = true;
@@ -137,6 +148,7 @@ export class Opponent {
     this.#holdUntil = 0;
     this.#bubble.dataset.kind = 'dots';
     this.#bubble.dataset.long = 'false';
+    this.#bubble.dataset.tight = 'false';
     const dots = [0, 1, 2].map(() => {
       const dot = document.createElement('span');
       dot.className = 'dot';
@@ -149,6 +161,7 @@ export class Opponent {
 
   /** Thinking is over and he has nothing new to say: the bubble goes back to his last line, at rest. */
   settle() {
+    window.clearTimeout(this.#dotsTimer);
     if (!this.#transient) return;
     const wait = Math.max(0, this.#holdUntil - performance.now());
     window.clearTimeout(this.#restTimer);
@@ -166,6 +179,7 @@ export class Opponent {
     window.clearTimeout(this.#restTimer);
     window.clearTimeout(this.#queueTimer);
     window.clearTimeout(this.#moodTimer);
+    window.clearTimeout(this.#dotsTimer);
     this.#queued = null;
     this.#current = null;
     this.#lastLine = null;
@@ -210,7 +224,13 @@ export class Opponent {
     const typed = document.createElement('span');
     const untyped = document.createElement('span');
     untyped.className = 'untyped';
+    untyped.textContent = shown;
     this.#text.replaceChildren(typed, untyped);
+    // the bubble has a reserved place; a line that would not fit it is set a size smaller
+    this.#bubble.dataset.tight = 'false';
+    const room = this.#bubble.parentElement?.clientHeight ?? 0;
+    if (room > 0 && this.#text.parentElement.offsetHeight > room) this.#bubble.dataset.tight = 'true';
+    untyped.textContent = '';
 
     if (instant) {
       typed.textContent = shown;
