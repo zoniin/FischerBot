@@ -163,6 +163,26 @@ class TestCorpus:
         for fg in corpus:
             assert "http" not in fg.citation
 
+    def test_one_name_per_event(self, corpus):
+        """The book's chapter headings and the database agree on what an event is called."""
+        assert game(corpus, "m60mg", 39).citation == \
+            "Botvinnik–Fischer, Varna Olympiad 1962 (My 60 Memorable Games, #39)"
+        assert game(corpus, "m60mg", 2).event_name == "Portorož Interzonal"
+        names = {fg.event_name for fg in corpus}
+        for stray in ("USA Championship", "Candidates' Tournament", "Leipzig Olympic", "Portoroz"):
+            assert stray not in names
+
+    def test_the_game_of_the_century_is_marked(self, corpus):
+        marked = [fg for fg in corpus if fg.is_game_of_the_century]
+        assert len(marked) == 1
+        assert marked[0].citation == \
+            "D. Byrne–Fischer, Rosenwald Trophy, New York 1956 (the “Game of the Century”)"
+        board = marked[0].game.board()
+        moves = list(marked[0].game.mainline_moves())
+        for move in moves[:33]:
+            board.push(move)
+        assert board.san(moves[33]) == "Be6"   # 17...Be6, leaving the queen to be taken
+
 
 class TestBook:
     def test_start_position_in_book(self, book):

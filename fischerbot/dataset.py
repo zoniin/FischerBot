@@ -71,7 +71,8 @@ class FischerGame:
             return "World Championship"
         if self.source == "career":
             return _CAREER_EVENTS.get(self.event, self.event)
-        return _pretty_event(self.event)
+        name = _pretty_event(self.event)
+        return _BOOK_EVENTS.get(name, name)
 
     @property
     def citation(self) -> str:
@@ -87,7 +88,15 @@ class FischerGame:
         year = self.year or ""
         if self.source == "m60mg":
             return f"{first}–{second}{where} {year} (My 60 Memorable Games, #{self.number})"
+        if self.is_game_of_the_century:
+            return f"{first}–{second}{where} {year} (the “Game of the Century”)"
         return f"{first}–{second}{where} {year}".rstrip()
+
+    @property
+    def is_game_of_the_century(self) -> bool:
+        """Donald Byrne-Fischer, Rosenwald Trophy 1956: the 13-year-old's queen sacrifice."""
+        return (self.source == "career" and self.year == 1956 and self.white == "Byrne, Donald"
+                and self.event == "New York Rosenwald" and self.result == "0-1")
 
     @property
     def fischer_score(self) -> float:
@@ -116,6 +125,17 @@ _CAREER_EVENTS = {
     "Poughskeepie": "Poughkeepsie", "Meralco": "Manila", "Netanya-A": "Netanya",
     "Belgrade URS-World": "USSR vs. Rest of the World, Belgrade",
     "St Stefan/Belgrade m": "Sveti Stefan/Belgrade match",
+}
+
+# "My 60 Memorable Games" heads its chapters in its own words; where the same
+# event also appears in the career file, one name is used for both.
+_BOOK_EVENTS = {
+    "Portoroz": "Portorož Interzonal", "Stockholm": "Stockholm Interzonal",
+    "Interzonal, Sousse": "Sousse Interzonal", "Candidates' Tournament": "Candidates Tournament",
+    "USA Championship": "U.S. Championship", "Leipzig Olympic": "Leipzig Olympiad",
+    "Varna Olympic": "Varna Olympiad", "Havana Olympic": "Havana Olympiad",
+    "Havana": "Capablanca Memorial", "Santa Monica": "Piatigorsky Cup, Santa Monica",
+    "Monaco": "Monte Carlo",
 }
 
 _LOWERCASE_WORDS = {"del", "de", "la"}
