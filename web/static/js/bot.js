@@ -30,23 +30,25 @@ import { gamePhase } from './style.js';
 // Levels: four Fischers, youngest first
 // ---------------------------------------------------------------------------
 
-// The search settings of each level - the numbers to calibrate. `timeMs` bounds
-// the whole reply; the three weaker levels are held back by `maxDepth` and
-// `nodeLimit` long before the clock. `styleMarginCp` is the most centipawns a
-// Fischer-like move may cost against the engine's first choice.
+// The search settings of each level. `timeMs` bounds the whole reply; the three
+// weaker levels are held back by `maxDepth` and `nodeLimit` long before the
+// clock. `styleMarginCp` is the most centipawns a Fischer-like move may cost
+// against the engine's first choice. `strength` is what the page tells the
+// player: an estimate from matches against Stockfish 16 held to fixed ratings
+// (UCI_LimitStrength, 0.2-0.3 s a move) - see the README for the games behind it.
 const SEARCH_SETTINGS = {
-  //             timeMs  maxDepth   nodeLimit  styleMarginCp
-  prodigy:     [    400,        4,       3000,            60],
-  grandmaster: [    700,        7,      30000,            50],
-  champion:    [   1200,       12,     300000,            40],
-  world:       [   2500,       64,   50000000,            30],
+  //             timeMs  maxDepth   nodeLimit  styleMarginCp  strength
+  prodigy:     [    400,        2,        300,            60, 'about 1350'],
+  grandmaster: [    600,        4,       3000,            50, 'about 1800'],
+  champion:    [   1000,        7,      30000,            40, 'about 2150'],
+  world:       [   2500,       64,   50000000,            30, 'over 2800'],
 };
 
 /** One level: who he is (for the chooser), which of his games the book may use, how hard he thinks. */
 function defineLevel({ id, year, title, subtitle, blurb, later = false }) {
-  const [timeMs, maxDepth, nodeLimit, styleMarginCp] = SEARCH_SETTINGS[id];
+  const [timeMs, maxDepth, nodeLimit, styleMarginCp, strength] = SEARCH_SETTINGS[id];
   return Object.freeze({
-    id, year, title, subtitle, blurb,
+    id, year, title, subtitle, blurb, strength,
     book: Object.freeze({ year, later }),
     timeMs, maxDepth, nodeLimit, styleMarginCp,
   });
@@ -54,7 +56,7 @@ function defineLevel({ id, year, title, subtitle, blurb, later = false }) {
 
 /**
  * The levels, youngest first. Each is a frozen
- * { id, year, title, subtitle, blurb, book: { year, later }, timeMs, maxDepth, nodeLimit, styleMarginCp }.
+ * { id, year, title, subtitle, blurb, strength, book: { year, later }, timeMs, maxDepth, nodeLimit, styleMarginCp }.
  * `book` is what the opening book is asked with: the games he had played by
  * `year`, and for the World Champion (`later`) every game he ever played.
  */
@@ -98,7 +100,7 @@ const DEFAULT_STYLE_MARGIN_CP = 40;   // for a level that does not say: most the
 const ENDGAME_STYLE_MARGIN_CP = 15;   // endgames punish small inaccuracies: stay closer to the engine
 const MAX_STYLE_PROBES = 4;           // verification searches per move
 const SEARCH_SHARE = 0.9;             // of the time budget; the rest is kept for verification
-const MIN_STYLE_DEPTH = 3;            // a shallower search is too unreliable to deviate from
+const MIN_STYLE_DEPTH = 3;            // a shallower search is too unreliable to deviate from (unless the level itself is shallower)
 const STYLE_SCORE_LIMIT = 500;        // when winning or losing by this much, just play the best move
 
 const ENDGAME = 2;                    // gamePhase(): 0 opening, 1 middlegame, 2 endgame
@@ -271,7 +273,7 @@ export class FischerBot {
    */
   #styleAlternative(position, result, deadline) {
     const style = this.style;
-    if (style === null || result.depth < MIN_STYLE_DEPTH) return null;
+    if (style === null || result.depth < Math.min(MIN_STYLE_DEPTH, this.level.maxDepth ?? MIN_STYLE_DEPTH)) return null;
     const best = result.scoreCp;
     if (Math.abs(best) >= STYLE_SCORE_LIMIT) return null;
 

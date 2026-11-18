@@ -31,7 +31,7 @@ DIFFICULTIES = {
 LEVELS = {
     "prodigy": {"time_budget_ms": 700, "max_depth": 2, "style_margin_cp": 60, "book_year": 1956},
     "grandmaster": {"time_budget_ms": 1500, "max_depth": 4, "style_margin_cp": 50, "book_year": 1958},
-    "champion": {"time_budget_ms": 2500, "max_depth": 64, "style_margin_cp": 40, "book_year": 1963},
+    "champion": {"time_budget_ms": 3000, "max_depth": 7, "style_margin_cp": 40, "book_year": 1963},
     "world": {"time_budget_ms": 6000, "max_depth": 64, "style_margin_cp": 30,
               "book_year": 1972, "book_later": True},
 }

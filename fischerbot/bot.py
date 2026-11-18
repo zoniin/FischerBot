@@ -31,7 +31,7 @@ DEFAULT_STYLE_MARGIN_CP = 40   # most the bot will ever give up for style
 ENDGAME_STYLE_MARGIN_CP = 15   # endgames punish small inaccuracies: stay closer to the engine
 MAX_STYLE_PROBES = 4           # verification searches per move
 SEARCH_SHARE = 0.9             # of the time budget; the rest is kept for verification
-MIN_STYLE_DEPTH = 3            # a shallower search is too unreliable to deviate from
+MIN_STYLE_DEPTH = 3            # a shallower search is too unreliable to deviate from (unless max_depth itself is lower)
 STYLE_SCORE_LIMIT = 500        # when winning or losing by this much, just play the best move
 
 
@@ -136,7 +136,7 @@ class FischerBot:
         whose cost exceeds what its style is worth - or the phase's margin -
         is never played.
         """
-        if self.style is None or result.move is None or result.depth < MIN_STYLE_DEPTH:
+        if self.style is None or result.move is None or result.depth < min(MIN_STYLE_DEPTH, self.max_depth):
             return None
         best_score = result.score_cp
         if abs(best_score) >= STYLE_SCORE_LIMIT:

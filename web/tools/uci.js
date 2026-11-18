@@ -12,6 +12,8 @@
 //           limits, whatever "go" says.
 //   Hash    megabytes for the transposition table (default 32)
 //   Seed    a number: makes the book choices reproducible
+//   MaxDepth, Nodes, TimeMs, StyleMargin
+//           override that setting of the chosen level (for tuning the levels)
 //
 // The search is synchronous, so "stop" is only seen once a move has been
 // chosen; give "go" a movetime, depth or nodes limit.
@@ -29,6 +31,7 @@ let hashMb = 32;
 let engine = new Engine({ hashMb });
 let levelName = 'none';
 let seed = null;
+const overrides = {};          // level settings replaced for an experiment
 let bot = null;                // built on demand: it needs the book and the model
 let fen = START;
 let moves = [];
@@ -52,8 +55,9 @@ async function buildBot() {
     import('../static/js/bot.js'), import('../static/js/book.js'), import('../static/js/style.js'),
   ]);
   const data = name => JSON.parse(readFileSync(path.join(HERE, '..', 'static', 'data', name), 'utf8'));
-  const level = LEVELS.find(candidate => candidate.id === levelName);
-  if (!level) throw new Error(`unknown level ${levelName}`);
+  const base = LEVELS.find(candidate => candidate.id === levelName);
+  if (!base) throw new Error(`unknown level ${levelName}`);
+  const level = { ...base, ...overrides };
   return new FischerBot({
     engine, level,
     book: new Book(data('book.json')),
@@ -78,6 +82,13 @@ function setOption(name, value) {
       seed = value === '' || value === 'none' ? null : Number(value);
       bot = null;
       break;
+    case 'maxdepth': case 'nodes': case 'timems': case 'stylemargin': {
+      const key = { maxdepth: 'maxDepth', nodes: 'nodeLimit', timems: 'timeMs', stylemargin: 'styleMarginCp' }[name.toLowerCase()];
+      if (value === '' || value === 'default') delete overrides[key];
+      else overrides[key] = Number(value);
+      bot = null;
+      break;
+    }
     default:
       say(`info string unknown option ${name}`);
   }
@@ -147,6 +158,7 @@ for await (const raw of lines) {
         say(`option name Level type combo default none ${LEVEL_NAMES.map(name => `var ${name}`).join(' ')}`);
         say('option name Hash type spin default 32 min 1 max 1024');
         say('option name Seed type string default none');
+        for (const name of ['MaxDepth', 'Nodes', 'TimeMs', 'StyleMargin']) say(`option name ${name} type string default default`);
         say('uciok');
         break;
       case 'isready': say('readyok'); break;
