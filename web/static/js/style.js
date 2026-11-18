@@ -519,7 +519,11 @@ export class StyleModel {
     for (const move of position.legalMoves()) {
       scored.push({ move, score: weightedSum(weights, moveFeatures(ctx, move)) });
     }
-    scored.sort((a, b) => (a.score < b.score ? 1 : a.score > b.score ? -1 : 0));
+    // Best first; exact ties in UCI order, as fischerbot/style.py does, so the
+    // ranking does not depend on the order the moves were generated in.
+    for (const entry of scored) entry.uci = entry.move.uci();
+    scored.sort((a, b) => (a.score < b.score ? 1 : a.score > b.score ? -1 : a.uci < b.uci ? -1 : a.uci > b.uci ? 1 : 0));
+    for (const entry of scored) delete entry.uci;
     return scored;
   }
 

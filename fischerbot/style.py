@@ -441,13 +441,16 @@ class StyleModel:
         """(move, style score) for every legal move, most Fischer-like first.
 
         Engine features are left out: this is pure stylistic preference.
+        Moves with exactly the same score come in the order of their UCI
+        strings, so the ranking does not depend on how the moves were generated
+        (the browser's style.js orders them the same way).
         """
         ctx = PositionContext(board)
         w = self.weights
         scored = []
         for move in board.legal_moves:
             scored.append((move, sum(w[i] * v for i, v in move_features(ctx, move))))
-        scored.sort(key=lambda t: t[1], reverse=True)
+        scored.sort(key=lambda t: (-t[1], t[0].uci()))
         return scored
 
     def rank_moves(self, board: chess.Board) -> List[tuple]:
