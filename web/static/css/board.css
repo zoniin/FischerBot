@@ -1,0 +1,301 @@
+/* board.css — everything the FischerBot chessboard (js/board.js) needs.
+   Self-contained: it reads the site's palette (css/style.css) when it is there
+   and falls back to the same values on a bare page. All classes start "cb-". */
+
+/* The element handed to `new Board(root)`: a square the board fills. The page
+   may size it any way it likes; :where() keeps these defaults easy to override. */
+:where(.cb-host) {
+  position: relative;
+  aspect-ratio: 1 / 1;
+}
+
+.cb {
+  --cb-light: var(--walnut-light, #e4d2ab);
+  --cb-dark: var(--walnut-dark, #6f4b33);
+  --cb-gold: var(--gold, #c9a35b);
+  --cb-gold-bright: var(--gold-bright, #e6c47e);
+  --cb-edge: var(--board-edge, #4a3a29);
+  --cb-night: #16130f;
+  --cb-ink: var(--ink, #ece3cf);
+  --cb-ink-dim: var(--ink-dim, #a89c84);
+  --cb-font: var(--mono, ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace);
+  --cb-sq-px: 60px;                 /* one square; board.js keeps it exact */
+  --cb-last-light: #dcc473;
+  --cb-last-dark: #a5843f;
+  --cb-pick-light: #cfa848;
+  --cb-pick-dark: #bd9336;
+
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;                      /* board.js replaces these with whole pixels */
+  height: 100%;
+  isolation: isolate;
+  box-shadow: 0 0 0 1px var(--cb-edge);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cb, .cb *, .cb *::before, .cb *::after { box-sizing: border-box; }
+
+/* While a piece is in the hand the board rises above its neighbours. */
+.cb--dragging { z-index: 1000; cursor: grabbing; }
+
+/* ---------- squares ---------- */
+
+.cb-grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.cb-grid:focus-visible {
+  outline: 3px solid var(--cb-gold-bright);
+  outline-offset: 3px;
+}
+
+/* A breath of light across the wood. */
+.cb-grid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(155deg, rgba(255, 244, 220, 0.09), rgba(255, 244, 220, 0) 38%, rgba(0, 0, 0, 0.09));
+}
+
+.cb-row { display: flex; flex: 1 1 0; min-height: 0; }
+
+.cb-sq {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.cb-sq--light { background-color: var(--cb-light); color: var(--cb-dark); }
+.cb-sq--dark { background-color: var(--cb-dark); color: var(--cb-light); }
+
+.cb-sq--movable { cursor: grab; }
+.cb-sq--dot, .cb-sq--ring { cursor: pointer; }
+.cb--dragging .cb-sq { cursor: grabbing; }
+
+/* Coordinates: inside the edge squares, in the opposite square colour. */
+.cb-coord {
+  position: absolute;
+  font-family: var(--cb-font);
+  font-weight: 700;
+  font-size: clamp(8px, calc(var(--cb-sq-px) * 0.19), 15px);
+  line-height: 1;
+  opacity: 0.86;
+  pointer-events: none;
+}
+.cb-coord--rank { left: 7%; top: 7%; }
+.cb-coord--file { right: 8%; bottom: 6%; }
+
+/* The move just played, and the piece in the hand. */
+.cb-sq--light.cb-sq--last { background-color: var(--cb-last-light); }
+.cb-sq--dark.cb-sq--last { background-color: var(--cb-last-dark); }
+.cb-sq--light.cb-sq--selected { background-color: var(--cb-pick-light); }
+.cb-sq--dark.cb-sq--selected { background-color: var(--cb-pick-dark); }
+.cb-sq--last, .cb-sq--selected { color: #4b331f; }
+
+/* The king in check: a red ember under the piece. */
+.cb-sq--check::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 52%,
+    rgba(236, 58, 34, 0.98) 0%,
+    rgba(222, 42, 24, 0.86) 26%,
+    rgba(198, 28, 14, 0.42) 52%,
+    rgba(176, 18, 8, 0) 72%);
+  animation: cb-ember 420ms ease-out both;
+}
+@keyframes cb-ember {
+  from { opacity: 0; transform: scale(0.55); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Where the piece may go: a dot on an empty square, a ring round a capture. */
+.cb-sq--dot::after,
+.cb-sq--ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.cb-sq--dot::after {
+  background: radial-gradient(circle closest-side at 50% 50%, rgba(30, 20, 10, 0.34) 29%, rgba(30, 20, 10, 0) 32%);
+}
+.cb-sq--dark.cb-sq--dot::after {
+  background: radial-gradient(circle closest-side at 50% 50%, rgba(18, 11, 5, 0.46) 29%, rgba(18, 11, 5, 0) 32%);
+}
+.cb-sq--ring::after {
+  background: radial-gradient(circle closest-side at 50% 50%,
+    rgba(30, 20, 10, 0) 77%, rgba(30, 20, 10, 0.36) 80%, rgba(30, 20, 10, 0.36) 96%, rgba(30, 20, 10, 0) 99%);
+}
+.cb-sq--dark.cb-sq--ring::after {
+  background: radial-gradient(circle closest-side at 50% 50%,
+    rgba(18, 11, 5, 0) 77%, rgba(18, 11, 5, 0.5) 80%, rgba(18, 11, 5, 0.5) 96%, rgba(18, 11, 5, 0) 99%);
+}
+
+/* The legal square under the pointer or under a dragged piece. */
+.cb-sq--over.cb-sq--light { background-color: #d2b05a; }
+.cb-sq--over.cb-sq--dark { background-color: #b48a38; }
+.cb-sq--over { box-shadow: inset 0 0 0 max(2px, calc(var(--cb-sq-px) * 0.05)) rgba(255, 240, 200, 0.85); }
+.cb-sq--over.cb-sq--dot::after { background: none; }
+@media (hover: hover) {
+  .cb:not(.cb--dragging) .cb-sq--light.cb-sq--dot:hover,
+  .cb:not(.cb--dragging) .cb-sq--light.cb-sq--ring:hover { background-color: #d2b05a; }
+  .cb:not(.cb--dragging) .cb-sq--dark.cb-sq--dot:hover,
+  .cb:not(.cb--dragging) .cb-sq--dark.cb-sq--ring:hover { background-color: #b48a38; }
+  .cb:not(.cb--dragging) .cb-sq--dot:hover::after { background: none; }
+}
+
+/* The keyboard cursor, only while the keyboard is in use. */
+.cb--kbd .cb-grid:focus .cb-sq--cursor {
+  box-shadow:
+    inset 0 0 0 max(3px, calc(var(--cb-sq-px) * 0.06)) var(--cb-gold-bright),
+    inset 0 0 0 max(4px, calc(var(--cb-sq-px) * 0.06 + 1.5px)) rgba(22, 19, 15, 0.75);
+  z-index: 1;
+}
+
+/* Under a finger the square is hidden, so mark it with a wide halo. */
+.cb-halo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12.5%;
+  height: 12.5%;
+  pointer-events: none;
+  z-index: 1;
+  display: none;
+}
+.cb-halo--on { display: block; }
+.cb-halo::before {
+  content: '';
+  position: absolute;
+  inset: -55%;
+  border-radius: 50%;
+  background: rgba(22, 19, 15, 0.22);
+  box-shadow: 0 0 0 2px rgba(230, 196, 126, 0.5);
+}
+
+/* ---------- pieces ---------- */
+
+.cb-pieces {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cb-piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12.5%;
+  height: 12.5%;
+  background: center / 100% 100% no-repeat;
+  filter: drop-shadow(0 calc(var(--cb-sq-px) * 0.025) calc(var(--cb-sq-px) * 0.03) rgba(18, 10, 4, 0.38));
+}
+
+.cb-piece--moving { z-index: 5; will-change: transform; }
+.cb-piece--hidden { visibility: hidden; }
+
+.cb-piece--drag {
+  z-index: 20;
+  will-change: transform;
+  filter: drop-shadow(0 calc(var(--cb-sq-px) * 0.12) calc(var(--cb-sq-px) * 0.1) rgba(10, 6, 2, 0.5));
+}
+
+/* ---------- promotion picker ---------- */
+
+.cb-promo {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(22, 19, 15, 0.5);
+  animation: cb-fade 120ms ease-out both;
+}
+@keyframes cb-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.cb-promo-col {
+  --cb-gap: max(2px, calc(var(--cb-sq-px) * 0.05));
+  position: absolute;
+  width: 12.5%;
+  height: calc(50% + var(--cb-sq-px) * 0.44);
+  display: flex;
+  gap: var(--cb-gap);
+  padding: var(--cb-gap);
+  background: rgba(22, 19, 15, 0.97);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--cb-gold), 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+.cb-promo-col--down { top: 0; flex-direction: column; }
+.cb-promo-col--up { bottom: 0; flex-direction: column-reverse; }
+
+.cb-promo-btn,
+.cb-promo-cancel {
+  display: block;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.cb-promo-btn {
+  flex: 1 1 0;
+  background: var(--cb-light);
+  border: 1px solid var(--cb-edge);
+  border-radius: 3px;
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cb-promo-btn:hover { transform: scale(1.05); box-shadow: 0 0 0 2px var(--cb-gold); }
+.cb-promo-btn:focus-visible,
+.cb-promo-cancel:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--cb-gold-bright); }
+
+.cb-promo-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: center / 100% 100% no-repeat;
+}
+
+.cb-promo-cancel {
+  flex: 0 0 calc(var(--cb-sq-px) * 0.36);
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--cb-ink-dim);
+  font-family: var(--cb-font);
+  font-size: clamp(11px, calc(var(--cb-sq-px) * 0.3), 20px);
+  line-height: 1;
+}
+.cb-promo-cancel:hover { color: var(--cb-ink); }
+
+/* ---------- for screen readers only ---------- */
+
+.cb-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- less motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-sq--check::before, .cb-promo { animation: none; }
+  .cb-promo-btn { transition: none; }
+  .cb-promo-btn:hover { transform: none; }
+}
