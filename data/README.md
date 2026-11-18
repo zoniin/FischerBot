@@ -10,6 +10,7 @@ on them.
 | `wc1972.pgn` | 21 | The 1972 World Championship match against Spassky |
 | `career.pgn` | 651 | His other serious tournament and match games, 1955–1992 |
 | `engine_candidates.json.gz` | — | Derived: the engine's analysis of Fischer's decisions (see below) |
+| `fischer_quotes.json` | — | The real quotations the bot may use, each with its source (see below) |
 
 Game 2 of the match was a forfeit (Fischer did not appear), so 20 of the 21
 match games carry moves. Fischer's record across the corpus: **+407 =241 −83**
@@ -63,14 +64,39 @@ the length of every repaired game, and full legality of every move.
 
 ## engine_candidates.json.gz
 
-Training the style model needs to know, for each of Fischer's ~3,300
-decisions, which moves were actually *playable*. That takes the engine
-the better part of an hour, so the result is cached here: for every position
-the engine's best move and score, and every other move it scores within a
-pawn of it. It is derived data — regenerate it with
+Training the style model needs to know, for each of Fischer's 30,270
+decisions, which moves were actually *playable*. The site's own engine
+(`web/static/js/engine.js`, run under Node by `web/tools/analyse.js`) gives
+each position 100,000 nodes - about fourteen plies - and records its best
+move and score and every other move it scores within a pawn of that. It takes
+about an hour on four cores, so the result is cached here. It is derived data
+- regenerate it with
 
 ```bash
 python train_style.py --analyse
 ```
 
-whenever the engine or its evaluation changes.
+whenever the engine or its evaluation changes (Node 20 or later must be on the
+path). An interrupted run can be resumed: pass the same `--work-dir`.
+
+## fischer_quotes.json
+
+Most of what the portrait says was written for the bot. Eighteen lines are
+Fischer's own, and are shown as quotations with their source. This file is
+the record of them: the wording, the source as it is shown, where the passage
+stands (which game's notes, which move), and how it was checked.
+
+* Sixteen come from his notes to the moves in *My 60 Memorable Games* (1969).
+  Each was found word for word in three separately extracted copies of the
+  book's text, and in the annotations - not in the introductions to the
+  games, which Larry Evans wrote. One of them ("I have never opened with the
+  d-pawn - on principle") is given as the current algebraic edition prints
+  it; the first edition, in descriptive notation, has "the QP".
+* Two more come from "A Bust to the King's Gambit", his article in the
+  first issue of the *American Chess Quarterly* (1961), found in several
+  independent transcriptions.
+
+Ten further candidates were left out because they make no sense away from the
+game they annotate. Nothing is presented as a quotation unless it is in this
+file: `tests/test_data_book_style.py` checks every quoted line in
+`web/static/data/commentary.json` against it.
