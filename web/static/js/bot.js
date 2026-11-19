@@ -43,7 +43,7 @@ import { gamePhase } from './style.js';
 // rated 2785.
 const SEARCH_SETTINGS = {
   //             timeMs  maxDepth   nodeLimit  styleMarginCp  strength
-  prodigy:     [    600,        6,      10000,            60, 'about 2000'],
+  prodigy:     [    600,        6,      10000,            60, 'about 2100'],
   grandmaster: [   1000,       10,     100000,            50, 'about 2400'],
   champion:    [   1500,       12,     300000,            40, 'about 2650'],
   world:       [   2500,       64,   50000000,            30, 'about 2800'],
