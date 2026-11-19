@@ -1,7 +1,7 @@
 // commentary.js: choosing a line, filling templates, the no-repeat rules.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Commentator, fillTemplate, eventPhrase, gameVariables, MOODS, QUOTE_GAP_PLIES } from '../static/js/commentary.js';
+import { Commentator, fillTemplate, eventPhrase, gameVariables, FALLBACKS, QUOTE_GAP_PLIES } from '../static/js/commentary.js';
 import { staticData } from './helpers.js';
 
 /** A deterministic stand-in for Math.random that walks through `values` for ever. */
@@ -89,7 +89,7 @@ test('the first event with a line wins; events without one are passed over', () 
   ], { ply: 4 });
   assert.equal(line.text, 'That loses.');
   assert.equal(line.category, 'player_blunder');
-  assert.equal(line.mood, 'pleased', 'the category default');
+  assert.ok(!('mood' in line), 'the portrait has one face: no mood is handed on');
 });
 
 test('a line whose variables are missing is skipped in favour of one that can be said', () => {
@@ -143,7 +143,6 @@ test('real quotations are marked, kept verbatim and spaced six moves apart', () 
   assert.equal(mixed.quote, null);
   const second = fischer.pick([{ category: 'quotes', frequency: 'always' }], { ply: 6 + QUOTE_GAP_PLIES });
   assert.equal(second.text, 'Real words two.');
-  assert.equal(second.mood, 'pleased');
 });
 
 test('a bot line is never dressed up as a quotation', () => {
@@ -157,7 +156,6 @@ test('a bot line is never dressed up as a quotation', () => {
       const line = fischer.say(category, vars, { ply: ply += 100 });
       if (line === null) continue;
       const source = lines.find(candidate => candidate.text === line.text || !candidate.quote);
-      assert.ok(MOODS.includes(line.mood), `${category}: mood ${line.mood}`);
       assert.ok(!/[{}]/.test(line.text), `${category}: unfilled variable in "${line.text}"`);
       if (line.quote !== null) {
         const original = lines.find(candidate => candidate.text === line.text);
@@ -173,17 +171,20 @@ test('a bot line is never dressed up as a quotation', () => {
 test('every category of the shipped file can be exhausted without a repeat', () => {
   const data = staticData('commentary.json');
   const fischer = new Commentator(data);
-  fischer.newGame({ year: 1972 });
   const vars = { opponent: 'Spassky', year: 1972, event: 'the World Championship', game: 6, san: 'Nf3', n: 3 };
   let ply = 0;
   for (const [category, lines] of Object.entries(data.categories)) {
+    fischer.newGame({ year: 1972 });           // (a text filed under two categories is said once per game)
     const said = [];
-    for (let i = 0; i <= lines.length; i += 1) {
+    for (let i = 0; i < lines.length; i += 1) {
       const line = fischer.say(category, vars, { ply: ply += 100 });
       if (line) said.push(line.text);
     }
     assert.equal(new Set(said).size, said.length, `${category} repeated a line`);
     assert.equal(said.length, lines.length, `${category}: every line can be said once with all variables present`);
+    const more = fischer.say(category, vars, { ply: ply += 100 });
+    if (category in FALLBACKS) assert.equal(more.category, FALLBACKS[category], `${category}: then its plainer relative`);
+    else assert.equal(more, null, `${category}: then nothing`);
   }
 });
 
@@ -197,29 +198,34 @@ test('lines marked "since" wait for a Fischer old enough to say them', () => {
   assert.equal(champion.say('later').text, 'About Reykjavik.');
 });
 
-test('say() ignores the dice; the mood falls back from line to event to category', () => {
+test('say() ignores the dice and runs dry when the category is used up', () => {
   const fischer = new Commentator(DATA, { random: sequence(0.99) });
   fischer.newGame();
   const line = fischer.say('greeting', {}, { ply: 0 });
   assert.equal(line.text, 'Sit down.');
-  assert.equal(line.mood, 'annoyed');
-  assert.equal(fischer.say('greeting', {}, { mood: 'surprised' }).mood, 'surprised');
+  assert.deepEqual(Object.keys(line).sort(), ['category', 'quote', 'text']);
+  assert.equal(fischer.say('greeting').text, 'Hello.');
   assert.equal(fischer.say('greeting'), null);
-  assert.equal(fischer.say('capture', {}, { mood: 'not-a-mood' }).mood, 'neutral');
 });
 
-test('thinking lines may come round again, only not twice in a row, and never the bare dots', () => {
+test('each thinking mutter is said once in a game, and never the bare dots', () => {
   const fischer = new Commentator(DATA, { random: () => 0 });
   fischer.newGame();
-  let last = null;
-  for (let i = 0; i < 8; i += 1) {
-    const line = fischer.thinking();
-    assert.ok(['Hm.', 'Let me see.'].includes(line.text));
-    assert.notEqual(line.text, last);
-    assert.equal(line.mood, 'thinking');
-    last = line.text;
-  }
+  const said = [fischer.thinking(), fischer.thinking()].map(line => line.text);
+  assert.deepEqual(said.sort(), ['Hm.', 'Let me see.']);
+  assert.equal(fischer.thinking(), null, 'nothing left: the dots will do');
+  fischer.newGame();
+  assert.ok(fischer.thinking(), 'a new game, and he may mutter again');
   assert.equal(new Commentator({ categories: {} }).thinking(), null);
+
+  const real = new Commentator(staticData('commentary.json'));
+  real.newGame({ year: 1972 });
+  const mutters = [];
+  for (let i = 0; i < 40; i += 1) {
+    const line = real.thinking();
+    if (line !== null) mutters.push(line.text);
+  }
+  assert.equal(new Set(mutters).size, mutters.length, 'no mutter twice');
 });
 
 test('snapshot and restore carry the no-repeat memory across a reload', () => {
@@ -248,4 +254,92 @@ test('broken input does not throw', () => {
   odd.newGame();
   assert.equal(odd.say('x').text, 'Fine.');
   assert.equal(odd.pick([null, { frequency: 'always' }, { category: 'y', frequency: 'always' }]), null);
+});
+
+// ---------------------------------------------------------------------------
+// Regressions from the QA review
+// ---------------------------------------------------------------------------
+
+test('a category with nothing to say at this level falls back to its plainer relative', () => {
+  assert.deepEqual({ ...FALLBACKS }, { book_move_memorable: 'book_move', book_move_1972: 'book_move' });
+  const data = {
+    categories: {
+      book_move: [{ text: 'I have had this against {opponent}.' }],
+      book_move_memorable: [{ text: 'Game {game} in my book.', since: 1969 }],
+      book_move_1972: [{ text: 'Game {game} in Reykjavik.', since: 1972 }],
+      other: [{ text: 'Too early.', since: 1972 }],
+    },
+  };
+  const vars = { opponent: 'Unzicker', year: 1962, event: 'the Varna Olympiad', game: 42 };
+  const boy = new Commentator(data, { random: () => 0 });
+  boy.newGame({ year: 1956 });
+  const line = boy.pick([{ category: 'book_move_memorable', frequency: 'always', vars }], { ply: 1 });
+  assert.equal(line.text, 'I have had this against Unzicker.');
+  assert.equal(line.category, 'book_move', 'the line says where it really came from');
+  boy.newGame({ year: 1956 });
+  assert.equal(boy.say('book_move_1972', vars).text, 'I have had this against Unzicker.');
+  assert.equal(boy.say('other', vars), null, 'only the categories named in FALLBACKS fall back');
+
+  const champion = new Commentator(data, { random: () => 0 });
+  champion.newGame({ year: 1972 });
+  assert.equal(champion.say('book_move_memorable', vars).text, 'Game 42 in my book.', 'no fallback while its own lines can be said');
+  assert.equal(champion.say('book_move_memorable', vars).text, 'I have had this against Unzicker.', 'used up: the plainer one');
+  assert.equal(champion.say('book_move_memorable', vars), null);
+});
+
+test('with the real data every level has something to say on its first book move', () => {
+  const data = staticData('commentary.json');
+  const vars = { opponent: 'Unzicker', year: 1962, event: 'the Varna Olympiad', game: 42 };
+  for (const year of [1956, 1958, 1963, 1972]) {
+    for (const category of ['book_move', 'book_move_memorable', 'book_move_1972']) {
+      const fischer = new Commentator(data);
+      fischer.newGame({ year });
+      const line = fischer.pick([{ category, frequency: 'always', vars }], { ply: 1 });
+      assert.ok(line !== null, `${category} in ${year}`);
+      assert.ok(!/[{}]/.test(line.text));
+      if (year < 1969) assert.equal(line.category, category === 'book_move' ? 'book_move' : 'book_move');
+    }
+  }
+});
+
+test('the same words are never said twice in a game, whatever category they are filed under', () => {
+  const data = {
+    categories: {
+      bot_better: [{ text: 'Tactics flow from a superior game.', quote: { source: 'A Book', year: 1969 } }],
+      quotes: [{ text: 'Tactics flow from a superior game.', quote: { source: 'A Book', year: 1969 } }],
+      a: [{ text: 'Same words.' }],
+      b: [{ text: 'Same words.' }],
+    },
+  };
+  const fischer = new Commentator(data, { random: () => 0 });
+  fischer.newGame();
+  assert.ok(fischer.say('bot_better', {}, { ply: 10 }));
+  assert.equal(fischer.say('quotes', {}, { ply: 100 }), null, 'the quotation was said already');
+  assert.ok(fischer.say('a'));
+  assert.equal(fischer.say('b'), null);
+
+  // the memory survives a reload, also one saved by the older "category + text" keys
+  const again = new Commentator(data, { random: () => 0 });
+  again.restore(JSON.parse(JSON.stringify(fischer.snapshot())));
+  assert.equal(again.say('quotes', {}, { ply: 200 }), null);
+  again.restore({ used: ['a\nSame words.'] });
+  assert.equal(again.say('b'), null);
+});
+
+test('a whole game of the real commentary never repeats a text', () => {
+  const data = staticData('commentary.json');
+  const vars = { opponent: 'Spassky', year: 1972, event: 'the World Championship', game: 6, san: 'Nf3', n: 3 };
+  const fischer = new Commentator(data);
+  fischer.newGame({ year: 1972 });
+  const said = [];
+  let ply = 0;
+  for (let round = 0; round < 6; round += 1) {
+    for (const category of Object.keys(data.categories)) {
+      const line = category === 'thinking' ? fischer.thinking() : fischer.say(category, vars, { ply: ply += 20 });
+      if (line !== null) said.push(line.quote ? line.text : `${line.text}`);
+    }
+  }
+  const quotations = said.filter(text => Object.values(data.categories).flat().some(line => line.quote && line.text === text));
+  assert.equal(new Set(quotations).size, quotations.length, 'no quotation twice');
+  assert.ok(quotations.length > 10);
 });

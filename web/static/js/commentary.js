@@ -9,58 +9,36 @@
 //   const line = fischer.pick(events, { ply });       // inside the move loop
 //   const line = fischer.say('takeback', {}, { ply }); // outside it
 //
-// An event is { category, frequency, vars, mood }:
+// An event is { category, frequency, vars }:
 //   frequency  'always' | 'often' (two times in three) | 'sometimes' (one in four)
 //   vars       values for the line's {placeholders}; a line that needs one
 //              that is missing (or empty) is skipped
-//   mood       the avatar's expression if the line does not name its own
 //
-// A line comes back as { text, mood, quote, category }: `quote` is
-// { source, year } for a real quotation and null for a line of the bot's.
+// A line comes back as { text, quote, category }: `quote` is { source, year }
+// for a real quotation and null for a line of the bot's. (The data also gives
+// lines a `mood`; the portrait is a photograph with one face, so it is ignored.)
 //
-// The rules: no line twice in a game; an 'always' event is always spoken;
-// the others are thinned out and never come from the same category two
-// moves running; real quotations are spaced at least six moves apart; a line
-// marked `since` is not said by a Fischer younger than that year.
-
-export const MOODS = Object.freeze(['neutral', 'pleased', 'annoyed', 'thinking', 'surprised']);
+// The rules: no text twice in a game, whatever category it is filed under (a
+// quotation is never said twice); an 'always' event is always spoken; the
+// others are thinned out and never come from the same category two moves
+// running; real quotations are spaced at least six moves apart; a line marked
+// `since` is not said by a Fischer younger than that year; a category with
+// nothing left to say falls back to its plainer relative (FALLBACKS).
 
 export const FREQUENCY = Object.freeze({ always: 1, often: 2 / 3, sometimes: 1 / 4 });
 
 /** Plies that must pass between two real quotations (six moves). */
 export const QUOTE_GAP_PLIES = 12;
 
-/** The expression that goes with a category when the line does not say. */
-const CATEGORY_MOODS = Object.freeze({
-  win_checkmate: 'pleased',
-  loss_checkmate: 'annoyed',
-  draw_stalemate: 'annoyed',
-  draw_repetition: 'neutral',
-  draw_fifty_moves: 'neutral',
-  draw_insufficient: 'neutral',
-  mate_in_n: 'pleased',
-  getting_mated: 'surprised',
-  player_blunder: 'pleased',
-  player_mistake: 'pleased',
-  player_inaccuracy: 'neutral',
-  player_good_move: 'surprised',
-  player_leaves_history: 'surprised',
-  player_follows_history: 'neutral',
-  player_promotes: 'annoyed',
-  player_check: 'annoyed',
-  player_capture: 'neutral',
-  out_of_book: 'thinking',
-  bot_better: 'pleased',
-  bot_winning: 'pleased',
-  bot_worse: 'annoyed',
-  bot_losing: 'annoyed',
-  bot_promotes: 'pleased',
-  bot_sacrifice: 'pleased',
-  bot_check: 'pleased',
-  endgame_reached: 'pleased',
-  thinking: 'thinking',
-  idle_nudge: 'annoyed',
-  takeback: 'annoyed',
+/**
+ * Where a category turns when none of its lines can be said (all of them are
+ * marked `since` a later year than the level's, or have been said already):
+ * the boy of 1956 cannot cite "My 60 Memorable Games", but he can still say
+ * that he has played the move before.
+ */
+export const FALLBACKS = Object.freeze({
+  book_move_memorable: 'book_move',
+  book_move_1972: 'book_move',
 });
 
 const EVENT_WORDS = /Championship|Tournament|Interzonal|Olympiad|Open|Memorial|Cup|Trophy|match|Candidates/;
@@ -111,18 +89,13 @@ function capitalise(text) {
   return text.replace(/^([a-z])/, letter => letter.toUpperCase());
 }
 
-function cleanMood(mood) {
-  return MOODS.includes(mood) ? mood : null;
-}
-
 export class Commentator {
   #categories;
   #random;
-  #used = new Set();          // "category\ntext" of every line said this game
+  #used = new Set();          // the text (as written in the data) of every line said this game
   #lastCategory = null;       // of the last line said in the move loop
   #lastSpokenPly = -Infinity;
   #lastQuotePly = -Infinity;
-  #lastThinking = null;
   #year = null;
 
   /**
@@ -154,7 +127,6 @@ export class Commentator {
     this.#lastCategory = null;
     this.#lastSpokenPly = -Infinity;
     this.#lastQuotePly = -Infinity;
-    this.#lastThinking = null;
     this.#year = Number.isFinite(year) ? year : null;
   }
 
@@ -172,7 +144,10 @@ export class Commentator {
   restore(saved) {
     this.newGame({ year: saved?.year ?? null });
     if (saved === null || typeof saved !== 'object') return;
-    if (Array.isArray(saved.used)) for (const key of saved.used) if (typeof key === 'string') this.#used.add(key);
+    // (older saves keyed a line as "category\ntext": the text is what counts)
+    if (Array.isArray(saved.used)) {
+      for (const key of saved.used) if (typeof key === 'string') this.#used.add(key.slice(key.lastIndexOf('\n') + 1));
+    }
     if (typeof saved.lastCategory === 'string') this.#lastCategory = saved.lastCategory;
     if (Number.isFinite(saved.lastSpokenPly)) this.#lastSpokenPly = saved.lastSpokenPly;
     if (Number.isFinite(saved.lastQuotePly)) this.#lastQuotePly = saved.lastQuotePly;
@@ -203,25 +178,33 @@ export class Commentator {
   }
 
   /** A line from one category, said unconditionally (take-back, new game, the end ...), or null. */
-  say(category, vars = {}, { ply = 0, mood = null } = {}) {
-    return this.#choose({ category, vars, mood }, ply);
+  say(category, vars = {}, { ply = 0 } = {}) {
+    return this.#choose({ category, vars }, ply);
   }
 
   /**
-   * Something to mutter while he thinks. These few lines may come round again
-   * in one game - only not twice in a row. Null if there are none.
+   * Something to mutter while he thinks: each of these few lines once in a
+   * game, like every other line, and never the bare dots (the bubble has its
+   * own). Null when he has none left.
    */
   thinking() {
-    const lines = (this.#categories.get('thinking') ?? []).filter(line => !/^[.…\s]+$/.test(line.text));
+    const lines = (this.#categories.get('thinking') ?? [])
+      .filter(line => !/^[.…\s]+$/.test(line.text) && !this.#used.has(line.text));
     if (lines.length === 0) return null;
-    const fresh = lines.length > 1 ? lines.filter(line => line.text !== this.#lastThinking) : lines;
-    const line = fresh[Math.min(fresh.length - 1, Math.floor(this.#random() * fresh.length))];
-    this.#lastThinking = line.text;
-    return { text: line.text, mood: 'thinking', quote: null, category: 'thinking' };
+    const line = lines[Math.min(lines.length - 1, Math.floor(this.#random() * lines.length))];
+    this.#used.add(line.text);
+    return { text: line.text, quote: null, category: 'thinking' };
   }
 
   #choose(event, ply) {
-    const lines = this.#categories.get(event.category);
+    const line = this.#chooseFrom(event.category, event, ply);
+    if (line !== null) return line;
+    const plainer = FALLBACKS[event.category];
+    return plainer === undefined ? null : this.#chooseFrom(plainer, event, ply);
+  }
+
+  #chooseFrom(category, event, ply) {
+    const lines = this.#categories.get(category);
     if (lines === undefined || lines.length === 0) return null;
     const quotesAllowed = ply - this.#lastQuotePly >= QUOTE_GAP_PLIES;
     const candidates = [];
@@ -229,7 +212,7 @@ export class Commentator {
       const isQuote = line.quote !== null && typeof line.quote === 'object';
       if (isQuote && !quotesAllowed) continue;
       if (Number.isFinite(line.since) && this.#year !== null && this.#year < line.since) continue;
-      if (this.#used.has(`${event.category}\n${line.text}`)) continue;
+      if (this.#used.has(line.text)) continue;
       // a real quotation is his words exactly: it is never filled in or altered
       const text = isQuote ? (/\{\w+\}/.test(line.text) ? null : line.text)
         : fillTemplate(line.text, event.vars ?? {});
@@ -238,15 +221,14 @@ export class Commentator {
     }
     if (candidates.length === 0) return null;
     const chosen = candidates[Math.min(candidates.length - 1, Math.floor(this.#random() * candidates.length))];
-    this.#used.add(`${event.category}\n${chosen.line.text}`);
+    this.#used.add(chosen.line.text);
     if (chosen.isQuote) this.#lastQuotePly = ply;
     return {
       text: chosen.text,
-      mood: cleanMood(chosen.line.mood) ?? cleanMood(event.mood) ?? CATEGORY_MOODS[event.category] ?? 'neutral',
       quote: chosen.isQuote
         ? { source: String(chosen.line.quote.source ?? ''), year: chosen.line.quote.year ?? null }
         : null,
-      category: event.category,
+      category,
     };
   }
 }

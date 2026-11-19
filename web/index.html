@@ -27,64 +27,50 @@
 
   <main class="stage" id="stage">
 
-    <div class="fischer">
-      <section class="opp panel" id="opp" aria-labelledby="opp-name" data-mood="neutral">
-        <header class="opp-head">
-          <div class="opp-portrait" id="portrait"></div>
+    <section class="board-col" aria-label="The board">
+
+      <!-- Fischer: the portrait stands on the page, resting on the board; what he says is beside it -->
+      <section class="opp" id="opp" aria-labelledby="opp-name" data-thinking="false" data-speaking="false">
+        <div class="opp-portrait">
+          <img src="/static/img/fischer.webp" alt="Bobby Fischer" width="512" height="512" decoding="async">
+          <span class="opp-year" id="opp-year" aria-hidden="true"></span>
+        </div>
+        <div class="opp-side">
+          <div class="speech">
+            <div class="bubble" id="bubble" aria-live="polite" aria-atomic="true" data-state="empty">
+              <p class="sr-only" id="bubble-said"></p>
+              <div class="bubble-box" aria-hidden="true">
+                <span class="bubble-tag">His own words</span>
+                <p class="bubble-text" id="bubble-text"></p>
+                <p class="bubble-source" id="bubble-source"></p>
+              </div>
+            </div>
+          </div>
           <div class="opp-id">
-            <p class="opp-status" id="status" role="status"><span class="lamp" aria-hidden="true"></span><span id="status-text">Setting up the pieces</span></p>
             <h2 class="opp-name" id="opp-name">Bobby Fischer</h2>
             <p class="opp-title" id="opp-title">&nbsp;</p>
             <p class="opp-meta" id="opp-meta">&nbsp;</p>
           </div>
-          <p class="opp-mate" id="opp-mate" role="status" hidden></p>
-        </header>
-
-        <div class="speech">
-          <div class="bubble" id="bubble" aria-live="polite" aria-atomic="true" data-state="empty">
-            <p class="sr-only" id="bubble-said"></p>
-            <div class="bubble-box" aria-hidden="true">
-              <span class="bubble-tag">His own words</span>
-              <p class="bubble-text" id="bubble-text"></p>
-              <p class="bubble-source" id="bubble-source"></p>
-            </div>
+          <div class="opp-state">
+            <p class="opp-status" id="status" role="status"><span class="lamp" aria-hidden="true"></span><span id="status-text">Setting up the pieces</span></p>
+            <span class="opp-taken" id="opp-taken"></span>
+            <p class="opp-mate" id="opp-mate" role="status" hidden></p>
           </div>
         </div>
-
-        <div class="cite" id="cite" data-kind="none">
-          <p class="kicker" id="cite-label">His games</p>
-          <p class="cite-game" id="cite-game">Nothing of his on the board yet.</p>
-          <p class="cite-note" id="cite-note">&nbsp;</p>
-        </div>
       </section>
 
-      <section class="panel engine" id="engine" aria-label="Engine details">
-        <h2 class="engine-head">
-          <button type="button" class="engine-toggle" id="engine-toggle" aria-expanded="false" aria-controls="engine-body">
-            <span>Engine details</span><span class="engine-chevron" aria-hidden="true"></span>
-          </button>
-        </h2>
-        <div class="engine-body" id="engine-body" hidden>
-          <p class="engine-empty" id="engine-empty">He has not moved yet.</p>
-          <dl class="engine-list" id="engine-list" hidden>
-            <div><dt>His move</dt><dd id="eng-move"></dd></div>
-            <div><dt>Came from</dt><dd id="eng-source"></dd></div>
-            <div><dt>Evaluation</dt><dd id="eng-eval"></dd></div>
-            <div><dt>Depth</dt><dd id="eng-depth"></dd></div>
-            <div><dt>Expected line</dt><dd id="eng-pv"></dd></div>
-            <div><dt>Effort</dt><dd id="eng-effort"></dd></div>
-          </dl>
-        </div>
-      </section>
-    </div>
-
-    <section class="board-col" aria-label="The board">
-      <div class="strip" id="strip-top"></div>
-      <div class="board-frame">
+      <div class="board-frame" id="board-frame">
         <div id="board"></div>
+        <div class="error-card" id="error" role="alert" hidden>
+          <p class="error-title">No move from Fischer</p>
+          <p class="error-text" id="error-text"></p>
+          <button type="button" class="btn-primary" id="btn-retry">Try again</button>
+        </div>
       </div>
+
       <div class="player-bar">
         <div class="strip" id="strip-bottom"></div>
+        <div class="review-dock" id="review-dock"></div>
         <div class="tools" role="toolbar" aria-label="Game controls">
           <button type="button" class="tool" id="btn-new">New game</button>
           <button type="button" class="tool" id="btn-back" disabled>Take back</button>
@@ -92,11 +78,13 @@
           <button type="button" class="tool" id="btn-sound" aria-pressed="true">Sound</button>
         </div>
       </div>
-      <div class="error-line" id="error" role="alert" hidden>
-        <span id="error-text"></span>
-        <button type="button" class="tool" id="btn-retry">Try again</button>
-      </div>
     </section>
+
+    <div class="cite" id="cite" data-kind="none">
+      <p class="kicker" id="cite-label">His games</p>
+      <p class="cite-game" id="cite-game">Nothing of his on the board yet.</p>
+      <p class="cite-note" id="cite-note">&nbsp;</p>
+    </div>
 
     <aside class="record" aria-label="The record of the game">
       <section class="panel sheet" aria-labelledby="sheet-heading">
@@ -109,7 +97,7 @@
         </header>
         <ol id="scoresheet" class="scoresheet" aria-label="Moves; choose one to look at that position"></ol>
         <div class="review" id="review">
-          <div class="review-steps" role="group" aria-label="Look through the game">
+          <div class="review-steps" id="review-steps" role="group" aria-label="Look through the game">
             <button type="button" class="step" id="rev-first" aria-label="Start of the game">&laquo;</button>
             <button type="button" class="step" id="rev-prev" aria-label="One move back">&lsaquo;</button>
             <button type="button" class="step" id="rev-next" aria-label="One move forward">&rsaquo;</button>
@@ -124,12 +112,32 @@
       </section>
     </aside>
 
+    <section class="panel engine" id="engine" aria-label="Engine details">
+      <h2 class="engine-head">
+        <button type="button" class="engine-toggle" id="engine-toggle" aria-expanded="false" aria-controls="engine-body">
+          <span>Engine details</span><span class="engine-chevron" aria-hidden="true"></span>
+        </button>
+      </h2>
+      <div class="engine-body" id="engine-body" hidden>
+        <p class="engine-empty" id="engine-empty">He has not moved yet.</p>
+        <dl class="engine-list" id="engine-list" hidden>
+          <div><dt>His move</dt><dd id="eng-move"></dd></div>
+          <div><dt>Came from</dt><dd id="eng-source"></dd></div>
+          <div><dt>Evaluation</dt><dd id="eng-eval"></dd></div>
+          <div><dt>Depth</dt><dd id="eng-depth"></dd></div>
+          <div><dt>Expected line</dt><dd id="eng-pv"></dd></div>
+          <div><dt>Effort</dt><dd id="eng-effort"></dd></div>
+        </dl>
+      </div>
+    </section>
+
   </main>
 
   <footer class="colophon">
     <p>The moves come from an opening book of Fischer&rsquo;s own games, a search engine running in your browser, and a style model trained on his play.
       Lines marked &ldquo;his own words&rdquo; are quotations with their source; everything else he says here was written for the bot.</p>
-    <p>The portrait is after an image found on TikTok, enlarged and coloured; its author is not known to us.</p>
+    <p>The portrait is after an image found on TikTok, enlarged and coloured; its author is not known to us.
+      The chess pieces are Colin M.L. Burnett&rsquo;s &ldquo;cburnett&rdquo; set.</p>
   </footer>
 </div>
 
@@ -149,8 +157,8 @@
       </div>
     </div>
     <ol class="levels" id="levels"></ol>
-    <footer class="chooser-foot">
-      <button type="button" class="tool" id="chooser-close">Close</button>
+    <footer class="chooser-foot" id="chooser-foot">
+      <button type="button" class="tool" id="chooser-close">Back to the game</button>
       <span class="chooser-hint" aria-hidden="true">Esc</span>
     </footer>
   </div>
@@ -163,6 +171,7 @@
       <p class="eyebrow" id="end-kicker"></p>
       <h2 class="end-title" id="end-title"></h2>
       <p class="end-score" id="end-score"></p>
+      <p class="end-versus" id="end-versus"></p>
       <figure class="end-word" id="end-word" hidden>
         <blockquote id="end-word-text"></blockquote>
         <figcaption id="end-word-source"></figcaption>

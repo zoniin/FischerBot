@@ -5,7 +5,12 @@
 // question goes to the server (POST /api/move) and its answer is reshaped to
 // look like the worker's. The caller never learns which one answered unless
 // it asks (`result.via`, `client.mode`); it hears of a failure only when both
-// have failed.
+// have failed - and then the error says what happened (`error.kind`:
+// 'unreachable' | 'server' | 'move' | 'position').
+//
+// An answer is checked before it is believed: a worker that sends something
+// that is not a legal move in the position is treated like one that sent an
+// error, and the server is asked instead.
 //
 //   const client = new EngineClient();
 //   client.start();
@@ -15,7 +20,7 @@
 // interest in an answer (new game, take back) simply ignores it when it
 // comes: nothing here keeps game state.
 
-import { STARTING_FEN } from './rules.js';
+import { Position, STARTING_FEN } from './rules.js';
 
 const DEFAULT_URLS = Object.freeze({
   worker: '/static/js/worker.js',
@@ -25,17 +30,35 @@ const DEFAULT_URLS = Object.freeze({
 });
 
 const INIT_TIMEOUT_MS = 25000;      // the book is a large file on a slow line
-const MOVE_GRACE_MS = 12000;        // on top of the level's own thinking time
+const MOVE_GRACE_MS = 5000;         // on top of the level's own thinking time, before the worker counts as silent
+
+/** An Error with a `kind` the page can explain in plain words. */
+function failure(kind, message) {
+  const error = new Error(message);
+  error.kind = kind;
+  return error;
+}
+
+/** Is `uci` a legal move after `moves` from `fen`? (False for anything malformed.) */
+export function isPlayable({ fen = STARTING_FEN, moves = [] }, uci) {
+  if (typeof uci !== 'string' || !/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) return false;
+  try {
+    const position = Position.fromMoves(moves, fen);
+    return position.isLegal(position.parseUci(uci));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * The server's reply to POST /api/move in the shape of the worker's result.
  * There is no `context` from the server, so the commentary has less to say.
  */
 export function fromServerReply(reply) {
-  if (reply === null || typeof reply !== 'object') throw new Error('The server sent no answer');
-  if (typeof reply.error === 'string') throw new Error(reply.error);
+  if (reply === null || typeof reply !== 'object') throw failure('server', 'The server sent no answer');
+  if (typeof reply.error === 'string') throw failure('server', reply.error);
   if (typeof reply.bot_move !== 'string' || reply.bot_move === '') {
-    throw new Error('The server had no move to play');
+    throw failure('move', 'The server had no move to play');
   }
   const result = {
     uci: reply.bot_move,
@@ -195,6 +218,10 @@ export class EngineClient {
     if (message.type === 'move') {
       const waiting = this.#pending.get(message.id);
       if (waiting === undefined) return;            // answered by the server meanwhile
+      if (!isPlayable(waiting.request, message.result?.uci)) {
+        this.#fallBack(message.id);                 // not a move: as good as an error
+        return;
+      }
       this.#pending.delete(message.id);
       this.#clearTimeout(waiting.timer);
       waiting.resolve({ ...message.result, via: 'worker' });
@@ -232,7 +259,7 @@ export class EngineClient {
 
   async #askServer({ fen, moves, level }) {
     if (!sameStart(fen)) {
-      throw new Error('The server can only play from the starting position');
+      throw failure('position', 'The server can only play from the starting position');
     }
     let response;
     try {
@@ -242,7 +269,7 @@ export class EngineClient {
         body: JSON.stringify({ history: moves, level }),
       });
     } catch (error) {
-      throw new Error(`The server could not be reached (${error?.message ?? error})`);
+      throw failure('unreachable', `The server could not be reached (${error?.message ?? error})`);
     }
     let reply = null;
     try {
@@ -251,8 +278,12 @@ export class EngineClient {
       reply = null;
     }
     if (!response.ok && (reply === null || typeof reply.error !== 'string')) {
-      throw new Error(`The server answered ${response.status}`);
+      throw failure('server', `The server answered ${response.status}`);
     }
-    return fromServerReply(reply);
+    const result = fromServerReply(reply);
+    if (!isPlayable({ fen, moves }, result.uci)) {
+      throw failure('move', `The server answered with a move that cannot be played (${result.uci})`);
+    }
+    return result;
   }
 }

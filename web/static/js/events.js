@@ -101,7 +101,32 @@ export function newMemory() {
   };
 }
 
-/** Which book category cites this game, and with which variables. */
+/**
+ * A memory that can be trusted: newMemory() overlaid with whatever of `memory`
+ * has the right shape. What comes back from localStorage may be anything.
+ */
+export function cleanMemory(memory) {
+  const clean = newMemory();
+  if (memory === null || typeof memory !== 'object') return clean;
+  const strings = list => (Array.isArray(list) ? list.filter(item => typeof item === 'string') : []);
+  clean.lastEval = Number.isFinite(memory.lastEval) ? memory.lastEval : null;
+  clean.lastPv = strings(memory.lastPv);
+  clean.wasInBook = memory.wasInBook === true;
+  clean.bookMoves = Number.isInteger(memory.bookMoves) && memory.bookMoves > 0 ? memory.bookMoves : 0;
+  clean.leftBook = memory.leftBook === true;
+  clean.openings = strings(memory.openings);
+  clean.tides = strings(memory.tides);
+  clean.sawMate = memory.sawMate === true;
+  clean.sawMated = memory.sawMated === true;
+  clean.endgame = memory.endgame === true;
+  return clean;
+}
+
+/**
+ * Which book category cites this game. The two special ones have lines that
+ * only an older Fischer can say; commentary.js falls back to plain `book_move`
+ * when none of them is available (see FALLBACKS there).
+ */
 export function bookCategory(game) {
   if (game === null || typeof game !== 'object') return 'book_move';
   if (game.source === 'wc1972') return 'book_move_1972';
@@ -129,11 +154,7 @@ export function eventsForBotMove({
   gameVariables = () => ({}), opensGame = false,
 }) {
   const events = [];
-  const next = {
-    ...newMemory(), ...memory,
-    openings: [...(memory.openings ?? [])],
-    tides: [...(memory.tides ?? [])],
-  };
+  const next = cleanMemory(memory);
   const add = (category, frequency, vars = {}) => events.push({ category, frequency, vars });
 
   const fromBook = result.source === 'book';
@@ -142,9 +163,9 @@ export function eventsForBotMove({
   const game = result.book?.game ?? null;
 
   const verdict = playerMove === null ? null : classifyPlayerMove({
-    before: memory.lastEval,
+    before: next.lastEval,
     after: score,
-    expected: Array.isArray(memory.lastPv) ? memory.lastPv[1] ?? null : null,
+    expected: next.lastPv[1] ?? null,
     played: playerUci,
   });
 
@@ -163,8 +184,8 @@ export function eventsForBotMove({
   // his own games
   const bookVars = gameVariables(game);
   const firstBookMove = fromBook && next.bookMoves === 0;
-  // 1.e4, "best by test": worth a word of its own, most of the time
-  if (opensGame && result.uci === 'e2e4') add('first_move_e4', 'often');
+  // 1.e4, "best by test": always worth a word of its own
+  if (opensGame && result.uci === 'e2e4') add('first_move_e4', 'always');
   if (firstBookMove) add(bookCategory(game), 'always', bookVars);
 
   const playerInHistory = context?.playerMove ?? null;
@@ -244,7 +265,10 @@ export function eventsForBotMove({
 
 /**
  * Has the game ended? Checkmate, stalemate, insufficient material, and the two
- * claims (threefold repetition, fifty moves), which are made automatically.
+ * draws by the clock of the game - but only once they have really happened:
+ * the position on the board for the third time, or fifty moves by each side
+ * without a capture or a pawn move. Nothing is claimed on anyone's behalf
+ * before that (a player who repeats once may still want to play on).
  *
  * @returns {?{ kind: 'checkmate'|'stalemate'|'insufficient'|'repetition'|'fifty', winner: ?boolean }}
  *   `winner` is WHITE, BLACK or null for a draw; null if the game goes on.
@@ -253,8 +277,8 @@ export function outcomeOf(position) {
   if (position.isCheckmate()) return { kind: 'checkmate', winner: position.turn === WHITE ? BLACK : WHITE };
   if (position.isStalemate()) return { kind: 'stalemate', winner: null };
   if (position.isInsufficientMaterial()) return { kind: 'insufficient', winner: null };
-  if (position.canClaimFiftyMoves()) return { kind: 'fifty', winner: null };
-  if (position.canClaimThreefoldRepetition()) return { kind: 'repetition', winner: null };
+  if (position.halfmoveClock >= 100) return { kind: 'fifty', winner: null };
+  if (position.isRepetition(3)) return { kind: 'repetition', winner: null };
   return null;
 }
 

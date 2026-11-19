@@ -1,19 +1,19 @@
-// opponent.js - Fischer's card: the portrait with its expressions and the
-// speech bubble that grows out of it. A view: it is told what he says and
-// how he looks, and knows nothing about chess.
+// opponent.js - Fischer above the board: the portrait and the speech bubble
+// beside it. A view: it is told what he says and whether he is thinking, and
+// knows nothing about chess.
 //
-//   const fischer = new Opponent({ card, portrait, bubble, said, text, source });
-//   await fischer.loadPortrait('/static/img/fischer.svg');
-//   fischer.say(line);                 // { text, mood, quote } from commentary.js
-//   fischer.setThinking(true);         // the look of a man calculating
+//   const fischer = new Opponent({ card, bubble, said, text, source });
+//   fischer.say(line);                 // { text, quote } from commentary.js
+//   fischer.setThinking(true);         // the photograph leans in, slowly (CSS on data-thinking)
 //   fischer.dots();                    // a quiet "..." in the bubble
 //   fischer.settle();                  // thinking is over: put the bubble back as it was
 //
-// The bubble has a fixed place and a reserved height, so nothing on the page
-// moves when he speaks. A line is typed out quickly, stays bright while it is
-// news, and then recedes ("rest") but can still be read. A real quotation is
-// typeset as one - quotation marks, source, "his own words" - and a line of
-// the bot's never is.
+// The portrait is a photograph with one face: nothing here changes it. The
+// bubble has a fixed place and a reserved height, so nothing on the page moves
+// when he speaks; a line too long for that place is set a size smaller. A line
+// is typed out quickly, stays bright while it is news, and then recedes
+// ("rest") but can still be read. A real quotation is typeset as one -
+// quotation marks, source, "his own words" - and a line of the bot's never is.
 
 const TYPE_MS_PER_CHAR = 20;
 const TYPE_MS_MAX = 1500;
@@ -21,6 +21,7 @@ const MIN_READ_MS = 1500;          // a line is not replaced by the next before 
 const LINGER_MS = 5200;            // how long a line stays bright after it is typed
 const LINGER_MS_PER_CHAR = 45;
 const LONG_QUOTE = 100;            // characters; longer quotations are set a size smaller
+const TIGHTEST = 3;                // how many sizes smaller a line may be set to fit its place
 
 /** "— Bobby Fischer, My 60 Memorable Games, game 45, 1969" as plain text. */
 export function attribution(quote) {
@@ -30,81 +31,67 @@ export function attribution(quote) {
   return `— ${parts.join(', ')}`;
 }
 
+/**
+ * A source as it is typeset: the title of a book or a journal in italics, the
+ * title of an article (already in quotation marks) and "game 24" upright.
+ *   'My 60 Memorable Games, game 24'            -> [My 60 Memorable Games]i , game 24
+ *   '“A Bust ...”, American Chess Quarterly'    -> “A Bust ...”, [American Chess Quarterly]i
+ * @returns {{ text: string, italic: boolean }[]}
+ */
+export function sourceParts(source) {
+  const text = String(source ?? '').trim();
+  if (text === '') return [];
+  const article = /^([“"].*?[”"],?\s*)(.+)$/.exec(text);
+  if (article !== null) return [{ text: article[1], italic: false }, ...sourceParts(article[2])];
+  const detail = /^(.*?)(,\s*(?:games?|p\.|pp\.|chapter|vol\.|no\.|introduction)\b.*)$/i.exec(text);
+  if (detail !== null && detail[1] !== '') return [{ text: detail[1], italic: true }, { text: detail[2], italic: false }];
+  return [{ text, italic: true }];
+}
+
+/** A bot line with typographer's apostrophes ("I've", not "I've" from a typewriter). Quotations are left exactly as they are. */
+export function typographic(text) {
+  return String(text).replace(/(\p{L})'(\p{L})/gu, '$1’$2').replace(/(\p{L})'(?=\s|$|[.,;:!?])/gu, '$1’');
+}
+
 export class Opponent {
   #card;
-  #portrait;
   #bubble;
   #said;
   #text;
   #source;
-  #svg = null;
   #reduced;
   #frame = 0;
   #restTimer = 0;
   #queueTimer = 0;
-  #moodTimer = 0;
   #dotsTimer = 0;
   #queued = null;
   #holdUntil = 0;
   #current = null;         // the line in the bubble (null: nothing, or the dots)
   #transient = false;      // the bubble shows thinking dots or a thinking mutter
   #lastLine = null;        // the last real line, to return to after thinking
-  #thinking = false;
-  #lineMood = null;
 
-  constructor({ card, portrait, bubble, said, text, source }) {
+  constructor({ card, bubble, said, text, source }) {
     this.#card = card;
-    this.#portrait = portrait;
     this.#bubble = bubble;
     this.#said = said;
     this.#text = text;
     this.#source = source;
     this.#reduced = typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
-  }
-
-  /**
-   * Shows the portrait. A photograph is simply an <img>; an SVG drawing is
-   * fetched and inlined, so that a data-mood attribute on it can change.
-   */
-  async loadPortrait(url) {
-    try {
-      if (!/\.svg(\?|#|$)/i.test(url)) throw new Error('a raster image');
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(String(response.status));
-      const markup = await response.text();
-      const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml');
-      const svg = parsed.documentElement;
-      if (svg.nodeName.toLowerCase() !== 'svg') throw new Error('not an svg');
-      this.#svg = document.importNode(svg, true);
-      this.#svg.setAttribute('role', 'img');
-      this.#svg.setAttribute('aria-label', 'Bobby Fischer');
-      this.#svg.removeAttribute('width');
-      this.#svg.removeAttribute('height');
-      this.#portrait.replaceChildren(this.#svg);
-    } catch {
-      const img = document.createElement('img');
-      img.src = url;
-      img.alt = 'Bobby Fischer';
-      this.#portrait.replaceChildren(img);
+    // the bubble's place changes size with the window: a line that fitted may need refitting
+    if (typeof ResizeObserver === 'function' && bubble.parentElement) {
+      new ResizeObserver(() => this.#fit()).observe(bubble.parentElement);
     }
-    this.#showMood();
   }
 
-  /** The last line he said (for the game-over card and for saving), or null. */
-  get lastLine() {
-    return this.#lastLine;
-  }
-
-  /** While he calculates he looks it - unless a line he has just said has its own expression. */
+  /** While he calculates the photograph leans in (CSS on data-thinking). */
   setThinking(on) {
-    this.#thinking = Boolean(on);
-    this.#showMood();
+    this.#card.dataset.thinking = String(Boolean(on));
   }
 
   /**
    * He says a line.
-   * @param {{text: string, mood?: string, quote?: ?{source: string, year: ?number}}} line
+   * @param {{text: string, quote?: ?{source: string, year: ?number}}} line
    * @param {object} [options]
    * @param {boolean} [options.instant]    no typewriter, no bright phase: it was said before a reload
    * @param {boolean} [options.urgent]     do not wait for the line before it to be read
@@ -148,7 +135,8 @@ export class Opponent {
     this.#holdUntil = 0;
     this.#bubble.dataset.kind = 'dots';
     this.#bubble.dataset.long = 'false';
-    this.#bubble.dataset.tight = 'false';
+    this.#bubble.dataset.tight = '0';
+    this.#bubble.dataset.typed = 'false';
     const dots = [0, 1, 2].map(() => {
       const dot = document.createElement('span');
       dot.className = 'dot';
@@ -178,72 +166,75 @@ export class Opponent {
     this.#stopTyping();
     window.clearTimeout(this.#restTimer);
     window.clearTimeout(this.#queueTimer);
-    window.clearTimeout(this.#moodTimer);
     window.clearTimeout(this.#dotsTimer);
     this.#queued = null;
     this.#current = null;
     this.#lastLine = null;
     this.#transient = false;
     this.#holdUntil = 0;
-    this.#lineMood = null;
     this.#bubble.dataset.state = 'empty';
     this.#card.dataset.speaking = 'false';
     this.#said.textContent = '';
-    this.#showMood();
   }
 
   #show(line, { instant = false, sticky = false, transient = false } = {}) {
     this.#stopTyping();
     window.clearTimeout(this.#restTimer);
-    window.clearTimeout(this.#moodTimer);
     const isQuote = line.quote !== null && typeof line.quote === 'object';
-    const shown = isQuote ? `“${line.text}”` : line.text;
+    const shown = isQuote ? `“${line.text}”` : typographic(line.text);
 
     this.#current = line;
     this.#transient = transient;
     if (!transient) this.#lastLine = line;
     this.#bubble.dataset.kind = isQuote ? 'quote' : 'line';
     this.#bubble.dataset.long = String(isQuote && line.text.length > LONG_QUOTE);
+    this.#bubble.dataset.typed = 'false';
 
     // for screen readers the whole line at once, and plainly which kind it is
     if (!instant) {
       this.#said.textContent = isQuote
         ? `Fischer, in his own words: ${shown} ${attribution(line.quote)}`
-        : `Fischer says: ${line.text}`;
+        : `Fischer says: ${shown}`;
     }
 
     if (isQuote) {
-      const source = document.createElement('cite');
-      source.textContent = line.quote.source ?? '';
-      const tail = line.quote.year ? `, ${line.quote.year}` : '';
-      this.#source.replaceChildren('— Bobby Fischer, ', source, tail);
+      const nodes = ['— Bobby Fischer'];
+      const parts = sourceParts(line.quote.source);
+      if (parts.length > 0) nodes.push(', ');
+      for (const part of parts) {
+        if (part.italic) {
+          const cite = document.createElement('cite');
+          cite.textContent = part.text;
+          nodes.push(cite);
+        } else {
+          nodes.push(part.text);
+        }
+      }
+      if (line.quote.year) nodes.push(`, ${line.quote.year}`);
+      this.#source.replaceChildren(...nodes);
     } else {
       this.#source.replaceChildren();
     }
 
+    // the whole line is laid out at once (the part not yet typed is transparent),
+    // so the bubble has its final size from the first letter
     const typed = document.createElement('span');
     const untyped = document.createElement('span');
     untyped.className = 'untyped';
     untyped.textContent = shown;
     this.#text.replaceChildren(typed, untyped);
-    // the bubble has a reserved place; a line that would not fit it is set a size smaller
-    this.#bubble.dataset.tight = 'false';
-    const room = this.#bubble.parentElement?.clientHeight ?? 0;
-    if (room > 0 && this.#text.parentElement.offsetHeight > room) this.#bubble.dataset.tight = 'true';
-    untyped.textContent = '';
+    this.#fit();
 
     if (instant) {
       typed.textContent = shown;
+      untyped.textContent = '';
+      this.#bubble.dataset.typed = 'true';
       this.#bubble.dataset.state = 'rest';
       this.#card.dataset.speaking = 'false';
       this.#holdUntil = 0;
-      this.#lineMood = null;
-      this.#showMood();
       return;
     }
 
-    this.#lineMood = typeof line.mood === 'string' ? line.mood : 'neutral';
-    this.#showMood();
     this.#open();
 
     const typingMs = this.#reduced.matches ? 0 : Math.min(TYPE_MS_MAX, shown.length * TYPE_MS_PER_CHAR);
@@ -253,22 +244,18 @@ export class Opponent {
     const finish = () => {
       typed.textContent = shown;
       untyped.textContent = '';
+      this.#bubble.dataset.typed = 'true';          // the source and the "his own words" stamp arrive now
       if (sticky) return;
       const linger = transient ? 1600 : Math.max(LINGER_MS, 2400 + shown.length * LINGER_MS_PER_CHAR);
       this.#restTimer = window.setTimeout(() => this.#rest(), linger);
-      // the expression of the remark passes sooner than the remark itself
-      this.#moodTimer = window.setTimeout(() => {
-        this.#lineMood = null;
-        this.#showMood();
-      }, Math.min(linger, 3800));
     };
 
     if (typingMs === 0) {
       finish();
       return;
     }
-    untyped.textContent = shown;
     let count = 0;
+    typed.textContent = '';
     const step = now => {
       const due = Math.min(shown.length, Math.ceil(((now - started) / typingMs) * shown.length));
       if (due !== count) {
@@ -286,6 +273,19 @@ export class Opponent {
     this.#frame = window.requestAnimationFrame(step);
   }
 
+  /** The bubble has a reserved place; a line that would not fit it is set smaller, a size at a time. */
+  #fit() {
+    const room = this.#bubble.parentElement?.clientHeight ?? 0;
+    const box = this.#text.parentElement;
+    if (room <= 0 || box === null || this.#bubble.dataset.kind === 'dots') return;
+    let tight = 0;
+    this.#bubble.dataset.tight = '0';
+    while (tight < TIGHTEST && box.offsetHeight > room) {
+      tight += 1;
+      this.#bubble.dataset.tight = String(tight);
+    }
+  }
+
   #open() {
     // restart the pop animation even if the bubble was already open
     this.#bubble.dataset.state = 'rest';
@@ -301,18 +301,10 @@ export class Opponent {
     }
     this.#bubble.dataset.state = this.#current === null ? 'empty' : 'rest';
     this.#card.dataset.speaking = 'false';
-    this.#lineMood = null;
-    this.#showMood();
   }
 
   #stopTyping() {
     if (this.#frame !== 0) window.cancelAnimationFrame(this.#frame);
     this.#frame = 0;
-  }
-
-  #showMood() {
-    const mood = this.#lineMood ?? (this.#thinking ? 'thinking' : 'neutral');
-    this.#card.dataset.mood = mood;
-    if (this.#svg !== null) this.#svg.setAttribute('data-mood', mood);
   }
 }

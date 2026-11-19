@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { Position, Move, WHITE, BLACK, QUEEN, ROOK, PAWN, KNIGHT } from '../static/js/rules.js';
 import {
   classifyPlayerMove, mateMoves, isMateFor, isMateAgainst, moveFacts, newMemory, eventsForBotMove,
-  outcomeOf, gameOverCategory, capturedMaterial, bookCategory,
+  outcomeOf, gameOverCategory, capturedMaterial, bookCategory, cleanMemory,
 } from '../static/js/events.js';
 import { gameVariables } from '../static/js/commentary.js';
 
@@ -110,7 +110,7 @@ test('1.e4 gets a word of its own, ahead of the citation, when he opens the game
   const e4 = { uci: 'e2e4', san: 'e4', source: 'book', evalCp: null, pv: [], book: { game: CAREER, count: 300 }, context: null };
   const opening = eventsForBotMove({ result: e4, memory: newMemory(), botMove: quiet, gameVariables, opensGame: true });
   assert.deepEqual(categories(opening.events).slice(0, 2), ['first_move_e4', 'book_move']);
-  assert.equal(opening.events[0].frequency, 'often');
+  assert.equal(opening.events[0].frequency, 'always', 'the brief: always, not most of the time');
   assert.equal(opening.events[1].frequency, 'always');
   const later = eventsForBotMove({ result: e4, memory: newMemory(), botMove: quiet, gameVariables });
   assert.ok(!categories(later.events).includes('first_move_e4'));
@@ -285,4 +285,54 @@ test('capturedMaterial lists what each side has lost and who is ahead', () => {
   assert.deepEqual(result.lostByBlack, [PAWN]);
   assert.equal(result.balance, 9 - 5);
   assert.ok(new Move(0, 8) instanceof Move);
+});
+
+// ---------------------------------------------------------------------------
+// Regressions from the QA review
+// ---------------------------------------------------------------------------
+
+test('a draw by repetition only when the position is on the board for the third time', () => {
+  const shuffle = ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1'];
+  for (let n = 0; n <= shuffle.length; n += 1) {
+    const position = Position.fromMoves(shuffle.slice(0, n));
+    assert.equal(outcomeOf(position), null, `after ${n} half-moves nothing has occurred three times`);
+  }
+  // here the side to move COULD claim (Ng8 would repeat for the third time): the game still goes on
+  const claimable = Position.fromMoves(shuffle);
+  assert.equal(claimable.canClaimThreefoldRepetition(), true);
+  assert.equal(outcomeOf(claimable), null);
+  const third = Position.fromMoves([...shuffle, 'f6g8']);
+  assert.equal(third.isRepetition(3), true);
+  assert.deepEqual(outcomeOf(third), { kind: 'repetition', winner: null });
+  // the same position with different rights is not the same position
+  const castled = Position.fromMoves(['e2e4', 'e7e5', 'e1e2', 'e8e7', 'e2e1', 'e7e8', 'e1e2', 'e8e7', 'e2e1', 'e7e8']);
+  assert.equal(outcomeOf(castled), null, 'the starting-like position occurred once with castling rights, twice without');
+});
+
+test('the fifty-move rule at a hundred half-moves, not at ninety-nine', () => {
+  const at98 = new Position('4k3/8/8/8/8/8/8/R3K3 w - - 98 80');
+  assert.equal(outcomeOf(at98), null);
+  at98.push(at98.parseUci('a1a2'));
+  assert.equal(at98.halfmoveClock, 99);
+  assert.equal(at98.canClaimFiftyMoves(), true, 'a claim is possible ...');
+  assert.equal(outcomeOf(at98), null, '... but nobody has made it');
+  at98.push(at98.parseUci('e8e7'));
+  assert.equal(at98.halfmoveClock, 100);
+  assert.deepEqual(outcomeOf(at98), { kind: 'fifty', winner: null });
+  // mate on the hundredth half-move is mate
+  const mated = new Position('7k/5K2/8/8/8/8/8/7R b - - 100 90');
+  assert.equal(mated.isCheckmate(), true);
+  assert.deepEqual(outcomeOf(mated), { kind: 'checkmate', winner: WHITE });
+});
+
+test('a memory of the wrong shape (a damaged save) is repaired, not trusted', () => {
+  const broken = { tides: 3, openings: 'sicilian', lastPv: null, lastEval: 'x', bookMoves: -2, sawMate: 'yes' };
+  assert.deepEqual(cleanMemory(broken), newMemory());
+  assert.deepEqual(cleanMemory(null), newMemory());
+  const good = { ...newMemory(), tides: ['bot_better'], openings: ['sicilian'], lastEval: 30, lastPv: ['e2e4', 'e7e5'], bookMoves: 2 };
+  assert.deepEqual(cleanMemory(good), good);
+  const result = { uci: 'e7e5', san: 'e5', source: 'search', evalCp: 500, pv: ['e7e5'], context: null };
+  const { events, memory } = eventsForBotMove({ result, memory: broken, botMove: quiet, playerMove: quiet, playerUci: 'e2e4', gameVariables });
+  assert.ok(categories(events).includes('bot_winning'));
+  assert.deepEqual(memory.tides, ['bot_better', 'bot_winning']);
 });

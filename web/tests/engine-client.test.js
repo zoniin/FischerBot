@@ -1,7 +1,7 @@
 // engine-client.js: the worker path, the silent fallback to the server, and the reshaped reply.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EngineClient, fromServerReply } from '../static/js/engine-client.js';
+import { EngineClient, fromServerReply, isPlayable } from '../static/js/engine-client.js';
 import { STARTING_FEN } from '../static/js/rules.js';
 
 /** A stand-in for a Worker that records what it is sent and answers when told to. */
@@ -118,7 +118,7 @@ test('an init error means the worker is not to be trusted; a move error is retri
   const other = new FakeWorker();
   const second = new EngineClient({ createWorker: () => other, fetch, timers: noTimers });
   second.start();
-  const waiting = second.move({ fen: STARTING_FEN, moves: [], level: 'world' });
+  const waiting = second.move({ fen: STARTING_FEN, moves: ['e2e4'], level: 'world' });
   other.answer({ type: 'error', id: other.sent[0].id, message: 'Cannot load the opening book' });
   assert.equal((await waiting).via, 'server');
   assert.equal(second.mode, 'server');
@@ -170,4 +170,77 @@ test('dispose stops the worker and settles what was open', async () => {
   client.dispose();
   assert.ok(worker.terminated);
   await assert.rejects(move, /shut down/);
+});
+
+// ---------------------------------------------------------------------------
+// Regressions from the QA review
+// ---------------------------------------------------------------------------
+
+test('isPlayable: a legal move in the position, and nothing else', () => {
+  assert.equal(isPlayable({ fen: STARTING_FEN, moves: ['e2e4'] }, 'e7e5'), true);
+  assert.equal(isPlayable({ fen: STARTING_FEN, moves: [] }, 'e7e5'), false, 'not his turn');
+  assert.equal(isPlayable({ fen: STARTING_FEN, moves: ['e2e4'] }, 'e7e4'), false);
+  for (const junk of [undefined, null, '', 'e5', 'zzzz', 42, {}]) {
+    assert.equal(isPlayable({ fen: STARTING_FEN, moves: ['e2e4'] }, junk), false);
+  }
+  assert.equal(isPlayable({ fen: 'not a fen', moves: [] }, 'e2e4'), false);
+  assert.equal(isPlayable({ fen: '8/P6k/8/8/8/8/8/K7 w - - 0 1', moves: [] }, 'a7a8q'), true);
+});
+
+test('a worker that answers with something unplayable is treated like one that failed: the server is asked', async () => {
+  for (const result of [{ uci: 'e7e4', san: '??' }, {}, null, { uci: '' }]) {
+    const worker = new FakeWorker();
+    const fetch = fakeFetch(SERVER_MOVE);
+    const client = new EngineClient({ createWorker: () => worker, fetch, timers: noTimers });
+    client.start();
+    worker.answer({ type: 'ready', id: worker.sent[0].id, info: {} });
+    const move = client.move({ fen: STARTING_FEN, moves: ['e2e4'], level: 'world' });
+    worker.answer({ type: 'move', id: worker.last('move').id, result });
+    const answer = await move;
+    assert.equal(answer.via, 'server');
+    assert.equal(answer.uci, 'e7e5');
+    assert.equal(fetch.calls.length, 1);
+    assert.equal(client.mode, 'worker', 'one bad answer does not condemn the worker');
+  }
+});
+
+test('when both fail the error says what happened', async () => {
+  const ask = async (reply, options) => {
+    const client = new EngineClient({ createWorker: () => { throw new Error('no workers'); }, fetch: fakeFetch(reply, options), timers: noTimers });
+    client.start();
+    try {
+      await client.move({ fen: STARTING_FEN, moves: ['e2e4'], level: 'world' });
+    } catch (error) {
+      return error;
+    }
+    return null;
+  };
+  const offline = await ask(new TypeError('Failed to fetch'));
+  assert.equal(offline.kind, 'unreachable');
+  const broken = await ask(null, { status: 500 });
+  assert.equal(broken.kind, 'server');
+  assert.match(broken.message, /500/);
+  const refused = await ask({ error: 'Unknown level' }, { status: 400 });
+  assert.equal(refused.kind, 'server');
+  const illegal = await ask({ ...SERVER_MOVE, bot_move: 'e7e4' });
+  assert.equal(illegal.kind, 'move');
+  assert.match(illegal.message, /cannot be played/);
+  const client = new EngineClient({ createWorker: () => { throw new Error('no workers'); }, fetch: fakeFetch(SERVER_MOVE), timers: noTimers });
+  await assert.rejects(client.move({ fen: '4k3/8/8/8/8/8/8/R3K3 w - - 0 1', moves: [], level: 'world' }), error => error.kind === 'position');
+});
+
+test('a silent worker is not waited for much longer than the level thinks', async () => {
+  const worker = new FakeWorker();
+  const timers = [];
+  const client = new EngineClient({
+    createWorker: () => worker, fetch: fakeFetch(SERVER_MOVE),
+    timers: { setTimeout: (fn, ms) => timers.push({ fn, ms }) - 1, clearTimeout: () => {} },
+  });
+  client.start();
+  worker.answer({ type: 'ready', id: worker.sent[0].id, info: {} });
+  const move = client.move({ fen: STARTING_FEN, moves: ['e2e4'], level: 'prodigy', timeMs: 600 });
+  const timer = timers.at(-1);
+  assert.ok(timer.ms <= 600 + 6000, `gives up after ${timer.ms} ms`);
+  timer.fn();
+  assert.equal((await move).via, 'server');
 });

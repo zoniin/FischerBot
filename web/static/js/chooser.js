@@ -26,6 +26,17 @@ export function strengthNote(level) {
   return typeof level?.strength === 'string' && level.strength.trim() !== '' ? level.strength.trim() : '';
 }
 
+/** "Plays at about 2000" - or nothing, if the level does not say how strong it is. */
+export function strengthLabel(level) {
+  const note = strengthNote(level);
+  return note === '' ? '' : `Plays at ${note}`;
+}
+
+/** A score inside a title ("11–0") must not break across two lines: word joiners round the dash. */
+export function unbreakable(text) {
+  return String(text ?? '').replace(/(\d)\s*([–-])\s*(\d)/g, '$1\u2060$2\u2060$3');
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -39,6 +50,7 @@ export class Chooser {
   #list;
   #radios;
   #close;
+  #foot;
   #levels;
   #onChoose;
   #onClose;
@@ -51,6 +63,7 @@ export class Chooser {
     this.#list = root.querySelector('#levels');
     this.#radios = [...root.querySelectorAll('[role="radio"]')];
     this.#close = root.querySelector('#chooser-close');
+    this.#foot = root.querySelector('#chooser-foot');
     this.#levels = levels;
     this.#onChoose = onChoose;
     this.#onClose = onClose;
@@ -82,7 +95,8 @@ export class Chooser {
 
   open({ levelId = null, colour = 'white', canResume = false } = {}) {
     this.#setColour(COLOURS.includes(colour) ? colour : 'white', false);
-    this.#close.textContent = canResume ? 'Back to the game' : 'Close';
+    // with no game to go back to there is nothing to close to: the way out is to choose
+    if (this.#foot !== null) this.#foot.hidden = !canResume;
     let target = null;
     for (const card of this.#list.querySelectorAll('.level')) {
       const last = card.dataset.level === levelId;
@@ -92,7 +106,8 @@ export class Chooser {
     if (!this.isOpen) this.#returnFocus = document.activeElement;
     this.#root.hidden = false;
     this.#root.scrollTop = 0;
-    (target ?? this.#list.querySelector('.level') ?? this.#dialog).focus({ preventScroll: true });
+    // no card is singled out on arrival - unless it is the Fischer played last
+    (target ?? this.#dialog).focus({ preventScroll: true });
   }
 
   close() {
@@ -117,23 +132,30 @@ export class Chooser {
     img.width = 800;
     img.height = 800;
     img.decoding = 'async';
-    const pips = element('span', 'level-pips');
-    pips.setAttribute('aria-hidden', 'true');
-    this.#levels.forEach((_, i) => pips.append(element('i', i <= index ? 'on' : '')));
-    art.append(img, element('span', 'level-year', String(level.year)), pips);
+    art.append(img, element('span', 'level-year', String(level.year)));
 
     const body = element('span', 'level-body');
     body.append(
-      element('span', 'level-title', level.title),
+      element('span', 'level-title', unbreakable(level.title)),
       element('span', 'level-sub', withoutYear(level.subtitle)),
       element('span', 'level-blurb', level.blurb),
     );
+    // how strong he is: four pips (which of the four Fischers) and, if the level says, a number
     const facts = element('span', 'level-facts');
+    const strength = element('span', 'level-strength');
+    const pips = element('span', 'level-pips');
+    pips.setAttribute('aria-hidden', 'true');
+    this.#levels.forEach((_, i) => pips.append(element('i', i <= index ? 'on' : '')));
+    strength.append(pips);
+    const label = strengthLabel(level);
+    if (label !== '') strength.append(element('span', 'level-rating', label));
+    facts.append(strength);
     const book = bookNote(level);
     if (book !== '') facts.append(element('span', 'level-book', book));
-    const strength = strengthNote(level);
-    if (strength !== '') facts.append(element('span', 'level-strength', strength));
-    body.append(facts, element('span', 'level-cta', 'Play him'));
+    const cta = element('span', 'level-cta');
+    cta.append(element('span', '', 'Play him'), element('span', 'level-arrow', '→'));
+    cta.lastChild.setAttribute('aria-hidden', 'true');
+    body.append(facts, cta);
 
     card.append(art, body);
     item.append(card);
