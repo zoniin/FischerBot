@@ -21,7 +21,7 @@ const MIN_READ_MS = 1500;          // a line is not replaced by the next before 
 const LINGER_MS = 5200;            // how long a line stays bright after it is typed
 const LINGER_MS_PER_CHAR = 45;
 const LONG_QUOTE = 100;            // characters; longer quotations are set a size smaller
-const TIGHTEST = 3;                // how many sizes smaller a line may be set to fit its place
+const TIGHTEST = 4;                // how many sizes smaller a line may be set to fit its place
 
 /** "— Bobby Fischer, My 60 Memorable Games, game 45, 1969" as plain text. */
 export function attribution(quote) {

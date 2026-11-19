@@ -378,7 +378,12 @@ function fischerFailed(error) {
   const detail = String(error?.message ?? error ?? '').trim();
   const kind = Object.hasOwn(FAILURES, error?.kind) ? error.kind : 'internal';
   // the plain account, and (when it adds something) what was actually reported
-  els.errorText.textContent = kind === 'server' && detail !== '' ? `${FAILURES.server.slice(0, -1)}: ${detail.replace(/\.$/, '')}.` : FAILURES[kind];
+  let text = FAILURES[kind];
+  if (kind === 'server' && detail !== '') {
+    const status = /^The server answered (\d{3})$/.exec(detail);
+    text = status !== null ? `${text.slice(0, -1)} (${status[1]}).` : `${text.slice(0, -1)}: ${detail.replace(/\.$/, '')}.`;
+  }
+  els.errorText.textContent = text;
   els.error.dataset.kind = kind;
   els.error.title = detail;
   els.error.hidden = false;
@@ -637,8 +642,10 @@ function renderOpponent() {
   els.opp.dataset.level = level.id;
   els.oppTitle.textContent = unbreakable(level.title);
   els.oppYear.textContent = String(level.year);
-  // year, where he was, how strong he is - the last only if the level says (never invented here)
-  els.oppMeta.textContent = [String(level.year), withoutYear(level.subtitle), strengthLabel(level)].filter(Boolean).join(' · ');
+  // the year and how strong he is - the last only if the level says (never invented here);
+  // where he was that year is on his card in the chooser, and in the tooltip
+  els.oppMeta.textContent = [String(level.year), strengthLabel(level)].filter(Boolean).join(' · ');
+  els.oppMeta.title = withoutYear(level.subtitle);
   renderMate();
 }
 

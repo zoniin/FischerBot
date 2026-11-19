@@ -1,5 +1,34 @@
 /* FischerBot — "Reykjavik 1972 broadcast": dark, warm, editorial.
-   The board itself is styled by board.css; this file is everything around it. */
+   The board itself is styled by board.css; this file is everything around it.
+
+   The page, top to bottom in the middle column: the masthead; Fischer (his
+   portrait standing on the page, the speech bubble beside it); a thin rule
+   with the state of the game; the board; your strip and the controls. The
+   caption of the game being followed, the scoresheet and the engine drawer are
+   beside the board when there is room and under it when there is not. Every
+   height above and below the board is a variable, so the board can be sized
+   from the height of the window as well as from its width. */
+
+/* Lining figures for the fallback faces: Georgia's numerals are old-style
+   ("11-0" reads "II-o"), so its digits are taken from a face that has lining
+   ones. Playfair Display has them built in (font-variant-numeric below). */
+@font-face {
+  font-family: 'FB Lining';
+  src: local('Times New Roman'), local('TimesNewRomanPSMT'), local('Liberation Serif'), local('Tinos'), local('Nimbus Roman'), local('Times');
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: 'FB Lining';
+  font-weight: 700 900;
+  src: local('Times New Roman Bold'), local('TimesNewRomanPS-BoldMT'), local('Liberation Serif Bold'), local('Tinos Bold'), local('Nimbus Roman Bold'), local('Times Bold');
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: 'FB Lining';
+  font-style: italic;
+  src: local('Times New Roman Italic'), local('TimesNewRomanPS-ItalicMT'), local('Liberation Serif Italic'), local('Tinos Italic'), local('Nimbus Roman Italic'), local('Times Italic');
+  unicode-range: U+0030-0039;
+}
 
 :root {
   --bg: #1c1916;
@@ -8,32 +37,41 @@
   --panel-raised: #2b251d;
   --line: #3b3328;
   --line-soft: #2e2820;
+  --edge: #5a4e3d;            /* outlines of things you can press */
   --ink: #ece3cf;
   --ink-dim: #a89c84;
-  --ink-faint: #7d7260;
+  --ink-faint: #9a8e78;       /* the smallest type still clears 4.5:1 on the page and on panels */
   --gold: #c9a35b;
   --gold-bright: #e6c47e;
   --gold-dim: rgba(201, 163, 91, 0.14);
   --walnut-light: #e4d2ab;
   --walnut-dark: #6f4b33;
   --board-edge: #4a3a29;
-  --paper: #efe4c9;
+  --paper: #f7f1e2;           /* the speech bubble: the lightest cream on the page */
+  --paper-rest: #d5cab0;
   --paper-ink: #231c12;
   --paper-dim: #6b5a3e;
   --red: #a4553f;
-  --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  --body: Georgia, 'Times New Roman', serif;
+  --red-bright: #d9694f;
+  --serif: 'Playfair Display', 'FB Lining', Georgia, 'Times New Roman', serif;
+  --body: 'FB Lining', Georgia, 'Times New Roman', serif;
   --mono: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
   --dur: 220ms;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* layout: everything above and below the board that is not the board */
-  --chrome: 258px;
-  --side: 300px;
+  /* layout: every height above and below the board */
+  --mast: 84px;             /* the masthead */
+  --opp-h: 186px;           /* Fischer: the portrait, and the bubble's place beside it (a little taller than he is) */
+  --portrait: 164px;
+  --state-h: 28px;          /* the rule he stands on: status, what he has taken, "M9" */
+  --bar-h: 46px;            /* your strip and the controls */
+  --stage-top: 12px;
+  --stage-bottom: 12px;
+  --side: 290px;
   --gap: 28px;
   --pad: 24px;
-  --speech: 170px;      /* the reserved height of the speech bubble: nothing moves when he talks */
-  --portrait: 104px;
+  --frame-pad: 10px;
+  --frame-max: 780px;
 }
 
 * { box-sizing: border-box; }
@@ -50,6 +88,7 @@ body {
   font-family: var(--body);
   font-size: 16px;
   line-height: 1.55;
+  font-variant-numeric: lining-nums;      /* a number is never set in old-style figures here */
   -webkit-font-smoothing: antialiased;
 }
 
@@ -94,8 +133,12 @@ button { font: inherit; color: inherit; }
 
 .masthead {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: var(--mast);
+  padding: 0 20px;
   text-align: center;
-  padding: 20px 20px 15px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -125,13 +168,14 @@ button { font: inherit; color: inherit; }
   margin: 0;
   font-family: var(--serif);
   font-weight: 900;
-  font-size: clamp(2rem, 1.3rem + 2.6vw, 3.1rem);
+  font-size: clamp(1.9rem, 1.3rem + 2vw, 2.7rem);
   line-height: 1;
   letter-spacing: 0.08em;
   color: var(--ink);
 }
 
 .masthead-sub {
+  display: none;
   margin: 8px auto 0;
   font-family: var(--serif);
   font-style: italic;
@@ -139,6 +183,7 @@ button { font: inherit; color: inherit; }
   font-size: 0.95rem;
   line-height: 1.3;
   color: var(--ink-dim);
+  text-wrap: balance;
 }
 
 .masthead-sub em { color: var(--gold-bright); font-style: italic; }
@@ -146,20 +191,39 @@ button { font: inherit; color: inherit; }
 /* ---------- stage layout ---------- */
 
 .stage {
-  --board: clamp(380px, min(100vw - 2 * var(--side) - 2 * var(--gap) - 2 * var(--pad), 100dvh - var(--chrome)), 800px);
+  /* everything in the middle column that is not the board frame */
+  --chrome: calc(var(--mast) + var(--stage-top) + var(--opp-h) + var(--state-h) + var(--bar-h) + 8px + var(--stage-bottom));
+  --wmax: calc(100vw - 2 * var(--side) - 2 * var(--gap) - 2 * var(--pad));
+  --frame: clamp(280px, min(var(--wmax), 100vh - var(--chrome)), var(--frame-max));
   display: grid;
-  grid-template-columns: var(--side) var(--board) var(--side);
-  grid-template-areas: "fischer board record";
-  gap: 20px var(--gap);
+  grid-template-columns: var(--side) var(--frame) var(--side);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "cite   board record"
+    "engine board record";
+  gap: 16px var(--gap);
   justify-content: center;
-  align-items: stretch;
-  padding: 22px var(--pad) 18px;
+  align-items: start;
+  padding: var(--stage-top) var(--pad) var(--stage-bottom);
   margin: 0 auto;
 }
 
-.fischer { grid-area: fischer; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.board-col { grid-area: board; width: var(--board); min-width: 0; }
-.record { grid-area: record; display: flex; flex-direction: column; gap: 18px; min-width: 0; min-height: 0; }
+@supports (height: 100dvh) {
+  .stage { --frame: clamp(280px, min(var(--wmax), 100dvh - var(--chrome)), var(--frame-max)); }
+}
+
+.board-col { grid-area: board; width: var(--frame); min-width: 0; }
+.cite { grid-area: cite; margin-top: calc(var(--opp-h) + var(--state-h)); }
+.engine { grid-area: engine; }
+.record {
+  grid-area: record;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin-top: calc(var(--opp-h) + var(--state-h));
+}
 
 /* ---------- panels and small type ---------- */
 
@@ -192,7 +256,7 @@ button { font: inherit; color: inherit; }
 .tool {
   padding: 8px 12px;
   background: transparent;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 3px;
   color: var(--ink-dim);
   font-family: var(--mono);
@@ -206,9 +270,21 @@ button { font: inherit; color: inherit; }
 
 .tool:hover:not(:disabled) { color: var(--gold-bright); border-color: var(--gold); }
 .tool:active:not(:disabled) { background: var(--gold-dim); }
-.tool:disabled { opacity: 0.38; cursor: default; }
-.tool[aria-pressed="true"] { color: var(--gold-bright); border-color: rgba(201, 163, 91, 0.55); }
+.tool:disabled { opacity: 0.5; cursor: default; }
+
+/* a switch (sound): a small lamp before the word, lit when on - not a gold outline that makes it look like the main button */
+.tool[aria-pressed]::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 0.08em;
+  background: var(--gold-bright);
+}
 .tool[aria-pressed="false"] { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--ink-faint); }
+.tool[aria-pressed="false"]::before { background: transparent; box-shadow: inset 0 0 0 1px var(--ink-faint); }
 
 .btn-primary {
   padding: 11px 18px;
@@ -232,7 +308,7 @@ button { font: inherit; color: inherit; }
   display: inline-grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -250,33 +326,193 @@ button { font: inherit; color: inherit; }
   transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
 
-.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn + .seg-btn { border-left: 1px solid var(--edge); }
 .seg-btn:hover { color: var(--ink); }
 .seg-btn[aria-checked="true"] { background: var(--gold-dim); color: var(--gold-bright); }
 .seg-btn:focus-visible { outline-offset: -3px; }
 
-/* ---------- the opponent ---------- */
+/* ---------- Fischer: the portrait on the page, the bubble beside it ---------- */
 
-.opp { padding: 16px; }
-
-.opp-head {
+.opp {
   display: grid;
   grid-template-columns: var(--portrait) minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
+  column-gap: 14px;
+  align-items: end;
+  height: var(--opp-h);
+  padding-left: 2px;
 }
 
-/* "M9": he has announced mate in nine (top right of his card, as on a broadcast caption) */
-.opp-head { position: relative; }
-.opp-mate {
+/* the cut-out figure stands directly on the page: no frame, no panel, no box */
+.opp-portrait {
+  position: relative;
+  width: var(--portrait);
+  height: var(--portrait);
+}
+
+/* a little light behind him, so the black suit does not sink into the dark page */
+.opp-portrait::before {
+  content: '';
   position: absolute;
-  top: -4px;
-  right: -2px;
+  inset: 8% -14% 0;
+  background: radial-gradient(closest-side at 50% 62%, rgba(214, 180, 112, 0.2), rgba(214, 180, 112, 0.07) 60%, transparent);
+  pointer-events: none;
+}
+
+.opp-portrait img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0 1px rgba(236, 227, 207, 0.22));
+}
+
+/* while he calculates he leans in over the board, slowly */
+.opp[data-thinking="true"] .opp-portrait img { animation: lean 4.5s ease-in-out infinite alternate; }
+
+@keyframes lean {
+  from { transform: none; }
+  to { transform: scale(1.045) rotate(-1.4deg); }
+}
+
+/* which Fischer this is: the year, as on his card in the chooser */
+.opp-year {
+  position: absolute;
+  left: 3px;
+  bottom: 4px;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 0.98rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.opp-side {
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 10px 0 7px;
+}
+
+/* his name and which Fischer this is: small type under the bubble */
+.opp-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+  min-width: 0;
+  margin-top: 7px;
+  line-height: 1.25;
+}
+
+.opp-name {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.opp-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.94rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  color: var(--gold-bright);
+}
+
+.opp-meta {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-faint);
+}
+
+/* the rule he stands on: the state of the game, what he has taken, and "M9" */
+.opp-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--state-h);
+  padding: 0 4px;
+  border-top: 1px solid var(--edge);
+  min-width: 0;
+}
+
+.opp-status {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+
+.opp-status #status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.lamp {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--edge);
+  transition: background-color var(--dur) var(--ease);
+}
+
+body[data-phase="his"] .opp-status .lamp { background: var(--gold); animation: pulse 1.1s ease-in-out infinite; }
+body[data-phase="yours"] .opp-status .lamp { background: var(--gold-bright); }
+body[data-phase="yours"] .opp-status { color: var(--ink); }
+body[data-phase="over"] .opp-status { color: var(--gold-bright); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* what he has taken: pushed to the right, and the first thing to give way when the row is full */
+.opp-taken {
+  flex: 1 100 auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* "M9": he has announced mate in nine - a caption at the end of the row, never on top of anything */
+.opp-mate {
+  flex: none;
   margin: 0;
   padding: 3px 7px 2px;
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 700;
+  line-height: 1.2;
   letter-spacing: 0.08em;
   color: var(--bg-deep);
   background: var(--gold-bright);
@@ -285,156 +521,75 @@ button { font: inherit; color: inherit; }
 .opp-mate[data-side="against"] { color: var(--ink); background: #8f2f26; }
 .opp-mate[hidden] { display: none; }
 
-/* the portrait: a framed photograph, gold rule outside, a dark mount inside */
-.opp-portrait {
-  position: relative;
-  width: var(--portrait);
-  height: var(--portrait);
-  padding: 3px;
-  background: var(--bg-deep);
-  border: 1px solid var(--gold);
-  border-radius: 3px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
-  transition: box-shadow 400ms var(--ease);
-}
-
-.opp-portrait svg,
-.opp-portrait img { display: block; width: 100%; height: 100%; border-radius: 1px; }
-
-.opp[data-mood="thinking"] .opp-portrait { animation: ponder 1.8s ease-in-out infinite; }
-.opp[data-speaking="true"] .opp-portrait { box-shadow: 0 0 0 2px rgba(230, 196, 126, 0.35), 0 8px 18px rgba(0, 0, 0, 0.4); }
-
-@keyframes ponder {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 163, 91, 0.0), 0 8px 18px rgba(0, 0, 0, 0.4); }
-  50% { box-shadow: 0 0 0 4px rgba(201, 163, 91, 0.28), 0 8px 18px rgba(0, 0, 0, 0.4); }
-}
-
-.opp-id { min-width: 0; }
-
-.opp-status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0 0 5px;
-  min-height: 1.1em;
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  line-height: 1.2;
-  color: var(--ink-dim);
-}
-
-.lamp {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--line);
-  transition: background-color var(--dur) var(--ease);
-}
-
-body[data-phase="his"] .opp-status .lamp { background: var(--gold); animation: pulse 1.1s ease-in-out infinite; }
-body[data-phase="yours"] .opp-status .lamp { background: var(--gold-bright); }
-body[data-phase="over"] .opp-status { color: var(--gold-bright); }
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1); }
-}
-
-.opp-name {
-  margin: 0;
-  font-family: var(--serif);
-  font-weight: 700;
-  font-size: 1.42rem;
-  line-height: 1.1;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  color: var(--ink);
-}
-
-.opp-title {
-  margin: 4px 0 0;
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 1rem;
-  line-height: 1.2;
-  color: var(--gold-bright);
-}
-
-.opp-meta {
-  margin: 5px 0 0;
-  font-family: var(--mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  line-height: 1.35;
-  color: var(--ink-faint);
-}
-
 /* ---------- what he says ---------- */
 
+/* the bubble's place: reserved, so nothing moves when he speaks or falls silent */
 .speech {
   position: relative;
-  height: var(--speech);
-  margin-top: 16px;
+  min-height: 0;
 }
 
 .bubble {
   position: absolute;
   left: 0;
   right: 0;
-  top: 0;
+  bottom: 0;
   z-index: 2;
+  display: flex;
+  justify-content: flex-start;
+  pointer-events: none;
 }
-
-/* a line too tall for its place (an unusually long quotation, a wider fallback font) is set smaller */
-.bubble[data-tight="true"] .bubble-text { font-size: 0.86rem !important; line-height: 1.3 !important; }
-.bubble[data-tight="true"] .bubble-source { margin-top: 5px; padding-top: 4px; font-size: 0.54rem; letter-spacing: 0.08em; }
 
 .bubble-box {
   position: relative;
-  padding: 12px 14px 13px;
+  max-width: min(100%, 31rem);
+  padding: 10px 15px 11px;
   background: var(--paper);
-  border: 1px solid var(--paper);
-  border-radius: 4px;
+  border-radius: 12px;
   color: var(--paper-ink);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
-  transform-origin: calc(var(--portrait) / 2) -10px;
-  transition: background-color 500ms var(--ease), border-color 500ms var(--ease), color 500ms var(--ease),
+  transform-origin: 0 calc(100% - 24px);
+  transition: background-color 500ms var(--ease), color 500ms var(--ease),
     box-shadow 500ms var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
-/* the tail, growing out of the portrait above */
+/* the tail, pointing left at him */
 .bubble-box::before {
   content: '';
   position: absolute;
-  left: calc(var(--portrait) / 2 - 8px);
-  top: -8px;
+  left: -6px;
+  bottom: 17px;
   width: 14px;
   height: 14px;
   background: inherit;
-  border-left: 1px solid;
-  border-top: 1px solid;
-  border-color: inherit;
-  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
   transform: rotate(45deg);
 }
 
 .bubble-text {
+  position: relative;
   margin: 0;
   font-family: var(--body);
   font-size: 1.02rem;
-  line-height: 1.4;
+  line-height: 1.38;
   overflow-wrap: break-word;
+  text-wrap: pretty;
 }
 
 .bubble-text .untyped { color: transparent; }
 
 .bubble-source,
 .bubble-tag { display: none; }
+
+/* a line too tall for its place (a long quotation, a narrow phone, a wider fallback font) is set smaller, a step at a time */
+.bubble[data-tight="1"] .bubble-text { font-size: 0.9rem !important; line-height: 1.32 !important; }
+.bubble[data-tight="2"] .bubble-text { font-size: 0.82rem !important; line-height: 1.28 !important; }
+.bubble[data-tight="3"] .bubble-text { font-size: 0.76rem !important; line-height: 1.24 !important; }
+.bubble[data-tight="4"] .bubble-text { font-size: 0.7rem !important; line-height: 1.2 !important; }
+.bubble:is([data-tight="2"], [data-tight="3"], [data-tight="4"]) .bubble-box { padding: 7px 12px 8px; }
+.bubble:is([data-tight="2"], [data-tight="3"], [data-tight="4"]) .bubble-source { margin-top: 4px; padding-top: 3px; font-size: 0.68rem; }
+.bubble[data-tight="4"] .bubble-source { font-size: 0.64rem; line-height: 1.25; }
+.bubble[data-kind="quote"]:is([data-tight="3"], [data-tight="4"]) .bubble-box { padding-top: 10px; }
 
 /* nothing said yet */
 .bubble[data-state="empty"] .bubble-box { opacity: 0; transform: scale(0.9); }
@@ -443,68 +598,80 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 .bubble[data-state="open"] .bubble-box { animation: speak 260ms var(--ease); }
 
 @keyframes speak {
-  from { opacity: 0; transform: scale(0.86) translateY(-6px); }
+  from { opacity: 0; transform: scale(0.86) translateX(-8px); }
   to { opacity: 1; transform: none; }
 }
 
-/* said a while ago: it recedes into the panel but can still be read */
+/* said a while ago: the paper dims, but it can still be read */
 .bubble[data-state="rest"] .bubble-box {
-  background: var(--panel);
-  border-color: var(--line);
-  color: var(--ink-dim);
-  box-shadow: none;
+  background: var(--paper-rest);
+  color: #2e2619;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
 }
 
-/* a real quotation is typeset as one */
-.bubble[data-kind="quote"] .bubble-box { padding-top: 16px; border-color: var(--gold); box-shadow: inset 0 3px 0 var(--gold), 0 10px 22px rgba(0, 0, 0, 0.35); }
-.bubble[data-kind="quote"][data-state="rest"] .bubble-box { border-color: rgba(201, 163, 91, 0.4); box-shadow: inset 0 3px 0 rgba(201, 163, 91, 0.4); }
+/* a real quotation is typeset as one: a gold band, his own words in italics, the source beneath */
+.bubble[data-kind="quote"] .bubble-box { padding-top: 14px; box-shadow: inset 0 4px 0 var(--gold), 0 10px 22px rgba(0, 0, 0, 0.35); }
+.bubble[data-kind="quote"][data-state="rest"] .bubble-box { box-shadow: inset 0 4px 0 rgba(160, 124, 58, 0.75), 0 6px 14px rgba(0, 0, 0, 0.25); }
 
 .bubble[data-kind="quote"] .bubble-text {
   font-family: var(--serif);
   font-style: italic;
   font-weight: 500;
-  font-size: 1.04rem;
-  line-height: 1.36;
+  font-size: 1.02rem;
+  line-height: 1.34;
 }
 
-.bubble[data-kind="quote"][data-long="true"] .bubble-text { font-size: 0.95rem; }
+.bubble[data-kind="quote"][data-long="true"] .bubble-text { font-size: 0.94rem; }
 
 .bubble[data-kind="quote"] .bubble-source {
   display: block;
-  margin: 8px 0 0;
-  padding-top: 7px;
+  margin: 6px 0 0;
+  padding-top: 5px;
   border-top: 1px solid rgba(107, 90, 62, 0.35);
-  font-family: var(--mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  line-height: 1.45;
+  font-family: var(--body);
+  font-size: 0.76rem;
+  line-height: 1.35;
   color: var(--paper-dim);
+  /* the attribution arrives when the words have been typed, not before */
+  opacity: 0;
+  transition: opacity 300ms var(--ease);
 }
 
-.bubble[data-kind="quote"][data-state="rest"] .bubble-source { color: var(--ink-faint); border-top-color: var(--line); }
-.bubble-source cite { font-style: normal; }
+.bubble[data-kind="quote"][data-typed="true"] .bubble-source { opacity: 1; }
+.bubble[data-kind="quote"][data-state="rest"] .bubble-source { color: #564830; }
+.bubble-source cite { font-style: italic; }
 
 .bubble[data-kind="quote"] .bubble-tag {
   display: block;
   position: absolute;
-  right: 10px;
+  right: 12px;
   top: -9px;
   padding: 2px 7px;
   background: var(--bg-deep);
   border: 1px solid var(--gold);
   border-radius: 2px;
   font-family: var(--mono);
-  font-size: 0.54rem;
+  font-size: 0.6rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   line-height: 1.4;
+  white-space: nowrap;
   color: var(--gold-bright);
+  opacity: 0;
 }
 
-/* thinking: three quiet dots */
-.bubble[data-kind="dots"] .bubble-box { display: inline-block; min-width: 64px; }
-.bubble[data-kind="dots"] .bubble-text { display: flex; gap: 6px; align-items: center; height: 1.4em; }
+/* "his own words" lands like a stamp once the quotation is complete */
+.bubble[data-kind="quote"][data-typed="true"] .bubble-tag { opacity: 1; animation: stamp 200ms var(--ease); }
+.bubble[data-kind="quote"][data-state="rest"] .bubble-tag { animation: none; }
+
+@keyframes stamp {
+  from { opacity: 0; transform: scale(1.3) rotate(-4deg); }
+  to { opacity: 1; transform: none; }
+}
+
+/* thinking: three quiet dots, in the same place */
+.bubble[data-kind="dots"] .bubble-box { min-width: 66px; }
+.bubble[data-kind="dots"] .bubble-text { display: flex; gap: 6px; align-items: center; justify-content: center; height: 1.38em; }
 
 .dot {
   width: 7px;
@@ -525,10 +692,11 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 /* ---------- the game of his being followed: set like a caption ---------- */
 
 .cite {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line-soft);
-  min-height: 92px;
+  min-width: 0;
+  min-height: 104px;
+  padding: 1px 0 2px 14px;
+  border-left: 2px solid var(--line);
+  transition: border-color var(--dur) var(--ease);
 }
 
 .cite .kicker { transition: color var(--dur) var(--ease); }
@@ -541,20 +709,23 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   font-size: 0.98rem;
   line-height: 1.3;
   color: var(--ink-dim);
+  text-wrap: balance;
 }
 
 .cite-note {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   font-family: var(--mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   line-height: 1.4;
   color: var(--ink-faint);
 }
 
+/* one accent only: the rule and the kicker turn gold, the name of the game stays ink */
+.cite[data-kind="book"] { border-left-color: var(--gold); }
 .cite[data-kind="book"] .kicker { color: var(--gold); }
-.cite[data-kind="book"] .cite-game { color: var(--gold-bright); }
+.cite[data-kind="book"] .cite-game { color: var(--ink); }
 
 /* ---------- engine details ---------- */
 
@@ -601,7 +772,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .engine-list > div {
   display: grid;
-  grid-template-columns: 7.2em minmax(0, 1fr);
+  grid-template-columns: 7.6em minmax(0, 1fr);
   gap: 10px;
   padding: 6px 0;
   border-bottom: 1px dotted var(--line-soft);
@@ -611,7 +782,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .engine-list dt {
   font-family: var(--mono);
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   line-height: 1.7;
@@ -631,30 +802,66 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .board-frame {
   position: relative;
-  padding: 10px;
+  padding: var(--frame-pad);
   background: linear-gradient(180deg, #2e261c, #251e15);
   border: 1px solid var(--board-edge);
-  border-radius: 4px;
+  border-radius: 0 0 4px 4px;
   box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
 }
 
 #board { width: 100%; aspect-ratio: 1 / 1; }
 
+/* neither engine answered: said on the board, where the eye is, with the way out */
+.error-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 40;
+  width: min(84%, 430px);
+  padding: 18px 20px 20px;
+  transform: translate(-50%, -50%);
+  background: var(--bg-deep);
+  border: 1px solid var(--red-bright);
+  border-top-width: 4px;
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  text-align: center;
+  animation: card 320ms var(--ease);
+}
+
+.error-card[hidden] { display: none; }
+
+.error-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.error-text {
+  margin: 8px 0 14px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: #e3b3a3;
+  overflow-wrap: anywhere;
+}
+
 .strip {
   display: flex;
   align-items: center;
   gap: 9px;
-  height: 34px;
-  padding: 0 4px;
   min-width: 0;
   font-family: var(--mono);
-  font-size: 0.66rem;
+  font-size: 0.68rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--ink-faint);
 }
 
-.strip .lamp { background: var(--line); }
+.strip .lamp { background: var(--edge); }
 .strip[data-turn="true"] .lamp { background: var(--gold-bright); box-shadow: 0 0 0 3px rgba(230, 196, 126, 0.16); }
 .strip[data-turn="true"] .strip-name { color: var(--ink); }
 
@@ -663,52 +870,54 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .strip-side::before { content: '\00b7'; margin-right: 9px; }
 
+/* captured pieces: on a chip of light wood, with a pale rim, so that black pieces can be read on the dark page */
 .strip-caps {
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   min-width: 0;
-  margin-left: 4px;
+  height: 24px;
+  padding: 0 6px 0 4px;
   overflow: hidden;
+  background: rgba(228, 210, 171, 0.3);
+  border-radius: 3px;
 }
 
-.strip-caps img { flex: none; width: 21px; height: 21px; margin-right: -8px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
+.strip-caps[data-pieces="white"] { background: rgba(228, 210, 171, 0.1); }
+
+.strip-caps img {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-right: -8px;
+  filter: drop-shadow(0 0 0.6px rgba(247, 241, 226, 0.95)) drop-shadow(0 0 0.6px rgba(247, 241, 226, 0.95));
+}
 .strip-caps img.gap { margin-left: 7px; }
 .strip-caps img:last-child { margin-right: 0; }
 
-.strip-plus { color: var(--gold-bright); letter-spacing: 0.06em; font-size: 0.72rem; }
+.strip-plus { flex: none; font-family: var(--mono); color: var(--gold-bright); letter-spacing: 0.06em; font-size: 0.74rem; }
 
 .player-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 14px;
-  margin-top: 4px;
+  gap: 6px 12px;
+  min-height: var(--bar-h);
+  margin-top: 8px;
 }
 
-.player-bar .strip { flex: 1 1 auto; }
+.player-bar .strip { flex: 1 1 auto; padding: 0 4px; }
+
+.review-dock { flex: none; display: flex; }
+.review-dock:empty { display: none; }
 
 .tools { display: flex; gap: 6px; flex: none; }
-
-.error-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 0 0;
-  padding: 9px 11px;
-  border-left: 3px solid var(--red);
-  background: rgba(164, 85, 63, 0.12);
-  font-family: var(--mono);
-  font-size: 0.74rem;
-  color: #dba18d;
-}
-
-.error-line[hidden] { display: none; }
 
 /* ---------- scoresheet ---------- */
 
 .sheet {
   flex: 1 1 auto;
+  height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -724,7 +933,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .sheet-names dt {
   font-family: var(--mono);
-  font-size: 0.56rem;
+  font-size: 0.66rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -749,6 +958,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 .scoresheet {
   flex: 1 1 0;
   min-height: 136px;
+  contain: size;                 /* however long the game, the sheet scrolls inside its place and never stretches the page */
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
@@ -756,7 +966,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-color: var(--edge) transparent;
   /* the ruled lines of the form, whether or not a move is written on them */
   background: repeating-linear-gradient(180deg, transparent 0 29px, var(--line-soft) 29px 30px);
   background-attachment: local;
@@ -791,6 +1001,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   font-style: italic;
   font-weight: 500;
   font-size: 1rem;
+  font-variant-numeric: lining-nums tabular-nums;
   line-height: 1;
   text-align: left;
   color: var(--ink);
@@ -807,12 +1018,14 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 .scoresheet .mark {
   font-family: var(--mono);
   font-style: normal;
-  font-size: 0.7rem;
-  color: var(--red);
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--red-bright);
 }
 
 .scoresheet .mark[data-verdict="good"] { color: var(--gold); }
-.scoresheet .mark[data-verdict="inaccuracy"] { color: var(--ink-faint); }
+.scoresheet .mark[data-verdict="mistake"] { color: #e08a3c; }
+.scoresheet .mark[data-verdict="inaccuracy"] { color: var(--ink-dim); }
 
 .scoresheet-result {
   display: flex !important;
@@ -849,7 +1062,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   height: 30px;
   padding: 0 0 3px;
   background: transparent;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 3px;
   color: var(--ink-dim);
   font-family: var(--body);
@@ -860,7 +1073,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 }
 
 .step:hover:not(:disabled) { color: var(--gold-bright); border-color: var(--gold); }
-.step:disabled { opacity: 0.35; cursor: default; }
+.step:disabled { opacity: 0.5; cursor: default; }
 
 .review-live { color: var(--gold-bright); border-color: var(--gold); }
 .review-live[hidden] { display: none; }
@@ -876,28 +1089,29 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .sheet-note {
   font-family: var(--mono);
-  font-size: 0.64rem;
+  font-size: 0.66rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--gold);
 }
 
-/* ---------- colophon ---------- */
+/* ---------- colophon: the footnote of the page ---------- */
 
 .colophon {
   max-width: 1280px;
-  margin: 6px auto 0;
-  padding: 14px 24px 26px;
+  margin: 10px auto 0;
+  padding: 16px 24px 28px;
   border-top: 1px solid var(--line-soft);
   text-align: center;
-  font-family: var(--mono);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
-  line-height: 1.7;
-  color: var(--ink-faint);
+  font-family: var(--body);
+  font-style: italic;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--ink-dim);
 }
 
-.colophon p { margin: 0 auto; max-width: 96ch; }
+.colophon p { margin: 0 auto; max-width: 68ch; text-wrap: pretty; }
+.colophon p + p { margin-top: 6px; color: var(--ink-faint); }
 
 /* ---------- the chooser: four Fischers ---------- */
 
@@ -945,6 +1159,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   font-size: 1rem;
   line-height: 1.35;
   color: var(--ink-dim);
+  text-wrap: balance;
 }
 
 .chooser-colour {
@@ -982,13 +1197,18 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 
+/* the lift belongs to the pointer; the keyboard gets the ring and the gold edge, and the row stays level */
 .level:hover,
 .level:focus-visible {
-  transform: translateY(-4px);
   border-color: var(--gold);
   box-shadow: 0 22px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--gold-dim);
 }
 
+@media (hover: hover) {
+  .level:hover { transform: translateY(-4px); }
+}
+
+/* the same photograph on all four, in full colour: the year, the title and the pips tell them apart */
 .level-art {
   position: relative;
   display: block;
@@ -996,7 +1216,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   aspect-ratio: 5 / 4;
   overflow: hidden;
   border-bottom: 1px solid var(--gold);
-  background: #262524;
+  background: var(--bg-deep);
 }
 
 .level-art img {
@@ -1004,21 +1224,26 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 50% 18%;
+  object-position: 50% 24%;
   transition: transform 500ms var(--ease);
 }
 
-.level:hover .level-art img,
-.level:focus-visible .level-art img { transform: scale(1.04); }
+@media (hover: hover) {
+  .level:hover .level-art img { transform: scale(1.04); }
+}
 
-/* the older the photograph, the softer the print */
-/* one photograph, four ages: the earlier the year, the more it has faded */
-.level[data-rank="1"] .level-art img { filter: grayscale(1) sepia(0.32) contrast(0.92) brightness(1.06); }
-.level[data-rank="2"] .level-art img { filter: grayscale(0.75) sepia(0.18) contrast(0.96); }
-.level[data-rank="3"] .level-art img { filter: saturate(0.7); }
+/* a shadow under the year, so that the numeral does not sit on the white shirt */
+.level-art::after {
+  content: '';
+  position: absolute;
+  inset: 50% 0 0 0;
+  background: linear-gradient(to top, rgba(22, 19, 15, 0.86), rgba(22, 19, 15, 0));
+  pointer-events: none;
+}
 
 .level-year {
   position: absolute;
+  z-index: 1;
   left: 12px;
   bottom: 6px;
   font-family: var(--serif);
@@ -1027,32 +1252,14 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   line-height: 1;
   letter-spacing: 0.02em;
   color: var(--ink);
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.9);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
-
-.level-pips {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  display: flex;
-  gap: 4px;
-}
-
-.level-pips i {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--gold-bright);
-  border-radius: 50%;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
-}
-
-.level-pips i.on { background: var(--gold-bright); }
 
 .level-body {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  padding: 14px 16px 15px;
+  padding: 14px 16px 16px;
   min-width: 0;
 }
 
@@ -1062,58 +1269,83 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   font-size: 1.3rem;
   line-height: 1.15;
   color: var(--ink);
+  text-wrap: balance;
 }
 
 .level-sub {
   margin-top: 6px;
+  min-height: 3em;                 /* two lines reserved: titles, blurbs and rules line up across the row */
   font-family: var(--mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.16em;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   line-height: 1.5;
   color: var(--gold);
 }
 
 .level-blurb {
-  margin-top: 9px;
+  margin-top: 8px;
   font-size: 0.88rem;
   line-height: 1.45;
   color: var(--ink-dim);
+  text-wrap: pretty;
 }
 
 .level-facts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 12px;
+  flex-direction: column;
+  gap: 3px;
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: 14px;
   font-family: var(--mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.14em;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1.5;
   color: var(--ink-faint);
 }
 
-.level-strength { color: var(--gold-bright); }
+.level-strength { display: flex; align-items: center; gap: 9px; color: var(--gold-bright); }
 
-.level-cta {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-soft);
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-  transition: color var(--dur) var(--ease);
+.level-pips { display: flex; gap: 4px; flex: none; }
+
+.level-pips i {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--gold-bright);
+  border-radius: 50%;
 }
 
-.level:hover .level-cta,
-.level:focus-visible .level-cta { color: var(--gold-bright); }
+.level-pips i.on { background: var(--gold-bright); }
 
+/* the action: it looks like the button it is */
+.level-cta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(201, 163, 91, 0.6);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.level-arrow { font-family: var(--body); font-size: 1rem; line-height: 1; letter-spacing: 0; transition: transform var(--dur) var(--ease); }
+
+.level:hover .level-cta,
+.level:focus-visible .level-cta { background: var(--gold); border-color: var(--gold); color: #221b10; }
+.level:hover .level-arrow,
+.level:focus-visible .level-arrow { transform: translateX(3px); }
+
+/* the Fischer you played last: a quiet mark, not a selection */
 .level[data-last="true"] { border-color: rgba(201, 163, 91, 0.5); }
+.level[data-last="true"] .level-book::after { content: ' \00b7  played last'; color: var(--gold); }
 
 .chooser-foot {
   display: flex;
@@ -1123,12 +1355,14 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   margin-top: 20px;
 }
 
+.chooser-foot[hidden] { display: none; }
+
 .chooser-hint {
   padding: 1px 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 2px;
   font-family: var(--mono);
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   letter-spacing: 0.1em;
   color: var(--ink-faint);
 }
@@ -1156,8 +1390,14 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   to { opacity: 1; transform: none; }
 }
 
-.end-art { background: #0c1420; border-right: 1px solid var(--gold); }
-.end-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; }
+.error-card { animation-name: card-centred; }
+@keyframes card-centred {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+.end-art { background: var(--bg-deep); border-right: 1px solid var(--gold); }
+.end-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 46% 20%; }
 
 .end-body { padding: 22px 22px 20px; min-width: 0; }
 
@@ -1174,14 +1414,25 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   margin: 6px 0 0;
   font-family: var(--serif);
   font-weight: 700;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
+  line-height: 1.1;
   letter-spacing: 0.06em;
   color: var(--gold-bright);
 }
 
+.end-versus {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
 .end-word {
   margin: 14px 0 0;
-  padding: 10px 0 0 12px;
+  padding: 2px 0 2px 12px;
   border-left: 2px solid var(--gold);
 }
 
@@ -1200,11 +1451,11 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 .end-word figcaption {
   margin: 6px 0 0;
   font-family: var(--mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.14em;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1.5;
-  color: var(--ink-faint);
+  color: var(--ink-dim);
 }
 
 .end-actions {
@@ -1219,110 +1470,175 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 /* ---------- responsive ---------- */
 
-/* a short window: the strapline gives its room to the board */
-@media (max-height: 820px) {
-  :root { --chrome: 232px; }
-  .masthead { padding: 14px 20px 12px; }
-  .masthead-sub { display: none; }
+/* a tall window has room for the strapline */
+@media (min-height: 1000px) and (min-width: 1000px) {
+  :root { --mast: 116px; }
+  .masthead-sub { display: block; }
 }
 
-/* two columns: Fischer and the scoresheet beside the board */
-@media (max-width: 1339px) {
-  :root { --side: 280px; --gap: 24px; --speech: 166px; --portrait: 92px; }
-  .opp-head { gap: 12px; }
-  .opp-name { font-size: 1.22rem; }
+/* an ordinary laptop window: the masthead gives its room to the board */
+@media (max-height: 940px) {
+  :root { --mast: 50px; --opp-h: 180px; --portrait: 160px; }
+  .masthead .eyebrow { display: none; }
+  .masthead-title { font-size: 1.7rem; }
+}
+
+/* a short window: so does the portrait, a little */
+@media (max-height: 820px) {
+  :root { --mast: 46px; --opp-h: 166px; --portrait: 150px; --stage-top: 8px; --stage-bottom: 8px; --bar-h: 44px; --state-h: 26px; }
+}
+
+/* two columns: the board, and beside it the caption, the scoresheet and the engine drawer */
+@media (max-width: 1279px) {
+  :root { --side: 280px; --gap: 24px; }
   .stage {
-    --board: clamp(380px, min(100vw - var(--side) - var(--gap) - 2 * var(--pad), 100dvh - var(--chrome)), 800px);
-    grid-template-columns: var(--side) var(--board);
+    --wmax: calc(100vw - var(--side) - var(--gap) - 2 * var(--pad));
+    grid-template-columns: var(--frame) var(--side);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
-      "fischer board"
-      "record  board"
-      "engine  board";
+      "board cite"
+      "board record"
+      "board engine";
+    gap: 14px var(--gap);
   }
-  .fischer { display: contents; }
-  .opp { grid-area: fischer; }
-  .engine { grid-area: engine; }
-  .levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .chooser { width: min(880px, 100%); }
-  .level { flex-direction: row; }
-  .level-art { width: 38%; aspect-ratio: auto; border-bottom: none; border-right: 1px solid var(--gold); }
-  .level-year { font-size: 2rem; }
+  .cite { margin-top: 10px; min-height: 112px; }
+  .record { margin-top: 0; }
 }
 
-/* one column: he sits above the board, the record below it */
-@media (max-width: 899px) {
-  :root { --pad: 16px; --speech: 110px; --portrait: 80px; }
-  .opp-name { font-size: 1.42rem; }
+@media (max-width: 1099px) {
+  .levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chooser { width: min(900px, 100%); }
+  .level { flex-direction: row; }
+  .level-art { width: 36%; aspect-ratio: auto; border-bottom: none; border-right: 1px solid var(--gold); }
+  .level-art img { object-position: 50% 30%; }
+  .level-year { font-size: 2rem; }
+  .level-sub { min-height: 0; }
+}
+
+/* one column: he is above the board, the caption, the record and the drawer below it */
+@media (max-width: 999px) {
+  :root { --pad: 16px; --mast: 60px; --bar-h: 96px; --frame-max: 680px; --stage-top: 10px; }
+  .masthead .eyebrow { display: none; }
+  .masthead-sub { display: none; }
   .stage {
-    --board: min(100vw - 2 * var(--pad), 640px);
-    grid-template-columns: var(--board);
+    --wmax: calc(100vw - 2 * var(--pad));
+    grid-template-columns: var(--frame);
     grid-template-rows: none;
     grid-template-areas: none;
     gap: 14px;
-    padding-top: 18px;
   }
-  .opp, .board-col, .record, .engine { grid-area: auto; }
-  .opp { order: 1; padding: 14px; }
-  .board-col { order: 2; }
-  .record { order: 3; }
-  .engine { order: 4; }
-  .speech { margin-top: 14px; }
-  .cite { min-height: 0; margin-top: 12px; padding-top: 10px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; align-items: baseline; }
-  .cite .kicker { grid-row: 1 / span 2; }
-  .cite-game { margin: 0; font-size: 0.94rem; }
-  .cite-note { margin: 0; grid-column: 2; }
-  .scoresheet { flex: none; height: 211px; }
+  .board-col, .cite, .record, .engine { grid-area: auto; }
+  .cite { margin-top: 4px; min-height: 0; }
+  .record { margin-top: 0; }
+  .scoresheet { flex: none; height: 222px; contain: none; }
+
+  /* your strip and the arrows that step through the game on one line, the controls on the next */
+  .player-bar { flex-wrap: wrap; align-content: flex-start; }
+  .player-bar .strip { flex: 1 1 0; height: 44px; }
+  .tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tool { padding-left: 6px; padding-right: 6px; }
+}
+
+/* fingers: nothing you press is smaller than 44 px */
+@media (max-width: 999px), (pointer: coarse) {
+  .tool, .btn-primary, .seg-btn { min-height: 44px; }
+  .step { width: 44px; height: 44px; }
+  .scoresheet { background: repeating-linear-gradient(180deg, transparent 0 35px, var(--line-soft) 35px 36px); background-attachment: local; }
+  .scoresheet li { height: 36px; }
+  .engine-toggle { min-height: 44px; }
 }
 
 @media (max-width: 620px) {
-  .levels { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .level-art { width: 30%; }
+  .levels { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 14px; }
+  .level-art { width: 31%; min-width: 104px; }
+  .level-art img { object-position: 46% 26%; }
   .level-year { left: 8px; font-size: 1.5rem; }
-  .level-pips { display: none; }
-  .level-body { padding: 11px 13px 12px; }
+  .level-body { padding: 10px 12px 11px; }
   .level-title { font-size: 1.12rem; }
-  .level-blurb { font-size: 0.84rem; }
-  .level-cta { display: none; }
-  .veil { padding: 18px 12px; }
-  .chooser-sub { font-size: 0.92rem; }
+  .level-sub { display: none; }
+  .level-blurb { margin-top: 5px; font-size: 0.84rem; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .level-facts { padding-top: 8px; }
+  .level-book { display: none; }
+  .level[data-last="true"] .level-rating::after { content: ' \00b7  played last'; color: var(--gold); }
+  .level-cta { margin-top: 8px; padding: 7px 10px; }
+  .veil { padding: 14px 12px; }
+  .chooser-head .eyebrow { margin-bottom: 4px; font-size: 0.6rem; }
+  .chooser-sub { display: none; }
+  .chooser-colour { margin-top: 12px; }
+  .chooser-foot { margin-top: 14px; }
 
-  .endcard { grid-template-columns: 104px minmax(0, 1fr); }
-  .end-art img { object-position: 46% 15%; }
-  .end-body { padding: 16px 14px 14px; }
-  .end-title { font-size: 1.5rem; }
-  .end-score { font-size: 1rem; }
-  .end-actions .tool { flex: 1 1 100%; }
+  /* the game-over card stands up: the whole face above, the words below */
+  .endcard { grid-template-columns: minmax(0, 1fr); }
+  .end-art { height: 210px; border-right: none; border-bottom: 1px solid var(--gold); }
+  .end-art img { object-position: 50% 18%; }
+  .end-body { padding: 16px 16px 16px; }
+  .end-title { font-size: 1.6rem; }
+  .end-actions { margin-top: 16px; }
+  .end-actions .tool { flex: 1 1 calc(50% - 4px); padding-left: 4px; padding-right: 4px; letter-spacing: 0.1em; }
+  .end-actions #end-close { flex-basis: 100%; }
 }
 
+/* a phone held upright */
 @media (max-width: 520px) {
-  :root { --pad: 10px; --speech: 114px; --portrait: 64px; }
-  .masthead { padding: 12px 14px 10px; }
-  .eyebrow { font-size: 0.56rem; letter-spacing: 0.26em; margin-bottom: 4px; }
-  .masthead-sub { display: none; }
-  .stage { padding-top: 12px; gap: 8px; }
-  .opp { padding: 10px 12px; }
-  .opp-head { gap: 12px; }
-  .opp-name { font-size: 1.22rem; }
-  .opp-title { font-size: 0.94rem; margin-top: 2px; }
-  .opp-meta { margin-top: 3px; }
-  .speech { margin-top: 12px; }
-  .bubble-box { padding: 10px 12px 11px; }
-  .bubble-text { font-size: 0.98rem; }
-  .bubble[data-kind="quote"] .bubble-text { font-size: 0.98rem; }
-  .bubble[data-kind="quote"][data-long="true"] .bubble-text { font-size: 0.86rem; line-height: 1.32; }
-  .bubble[data-kind="quote"] .bubble-source { margin-top: 6px; padding-top: 5px; font-size: 0.54rem; letter-spacing: 0.08em; }
-  .cite { display: block; margin-top: 10px; padding-top: 8px; }
-  .cite-game { margin-top: 3px; font-size: 0.9rem; }
-  .cite-note { display: none; }
-  .board-frame { padding: 5px; }
-  .strip { height: 30px; font-size: 0.6rem; letter-spacing: 0.12em; }
-  .strip-caps img { width: 18px; height: 18px; }
-  .player-bar { flex-wrap: wrap; }
-  .player-bar .strip { flex: 1 1 100%; }
-  .tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-  .tool { padding: 9px 4px; font-size: 0.6rem; letter-spacing: 0.1em; }
+  :root {
+    --pad: 8px; --mast: 44px; --frame-pad: 5px; --state-h: 26px; --stage-top: 6px; --stage-bottom: 10px;
+    /* he gets what the board leaves: the board is as wide as the phone, and must fit with him above it */
+    --opp-h: clamp(112px, 100vh - 100vw - 176px, 196px);
+    --portrait: min(128px, var(--opp-h));
+  }
+  @supports (height: 100dvh) {
+    :root { --opp-h: clamp(112px, 100dvh - 100vw - 176px, 196px); }
+  }
+  .masthead { padding: 0 14px; }
+  .masthead-title { font-size: 1.5rem; }
+  .stage { gap: 10px; }
+  .opp { column-gap: 10px; padding-left: 0; }
+  .opp-side { padding: 6px 0 5px; }
+  .opp-id { gap: 0 8px; margin-top: 5px; }
+  .opp-name { font-size: 0.9rem; }
+  .opp-title { font-size: 0.88rem; }
+  .opp-meta { font-size: 0.66rem; letter-spacing: 0.06em; }
+  .opp-year { font-size: 0.86rem; }
+  .opp-status { font-size: 0.66rem; letter-spacing: 0.1em; }
+  .bubble-box { padding: 8px 12px 9px; }
+  .bubble-text { font-size: 0.96rem; }
+  .bubble[data-kind="quote"] .bubble-text { font-size: 0.96rem; }
+  .bubble[data-kind="quote"][data-long="true"] .bubble-text { font-size: 0.88rem; line-height: 1.3; }
+  .bubble[data-kind="quote"] .bubble-source { margin-top: 5px; padding-top: 4px; font-size: 0.7rem; }
+  .cite { padding-left: 10px; }
+  .cite-game { margin-top: 3px; font-size: 0.92rem; }
+  .cite-note { margin-top: 3px; }
+  .strip { font-size: 0.66rem; letter-spacing: 0.1em; gap: 7px; }
+  .strip-caps img { width: 20px; height: 20px; }
+  .player-bar { margin-top: 6px; }
+  .tool { font-size: 0.66rem; letter-spacing: 0.08em; }
+  .review-steps { gap: 3px; }
   .colophon { padding: 12px 14px 22px; }
+}
+
+/* a phone on its side: the board on the left as tall as the window, everything else beside it */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+  :root { --mast: 34px; --opp-h: 164px; --portrait: 116px; --pad: 12px; --frame-pad: 5px; --state-h: 26px; }
+  .masthead-title { font-size: 1.15rem; }
+  .stage {
+    --frame: clamp(200px, min(100vh - var(--mast) - 20px, 48vw), 520px);
+    grid-template-columns: var(--frame) minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: 8px 14px;
+    padding: 8px var(--pad) 10px;
+    align-items: start;
+  }
+  @supports (height: 100dvh) {
+    .stage { --frame: clamp(200px, min(100dvh - var(--mast) - 20px, 48vw), 520px); }
+  }
+  .board-col { display: contents; }
+  .board-frame { grid-column: 1; grid-row: 1 / span 6; position: sticky; top: 8px; width: var(--frame); border-radius: 4px; }
+  .opp { grid-column: 2; grid-row: 1; }
+  .opp-state { grid-column: 2; grid-row: 2; margin-top: -8px; }
+  .player-bar { grid-column: 2; grid-row: 3; margin-top: 0; }
+  .cite { grid-column: 2; grid-row: 4; }
+  .record { grid-column: 2; grid-row: 5; }
+  .engine { grid-column: 2; grid-row: 6; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1331,4 +1647,5 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+  .opp[data-thinking="true"] .opp-portrait img { animation: none; }
 }
