@@ -949,7 +949,7 @@ function closeChooser() {
   armIdle();
 }
 
-function chosen({ levelId, colour }) {
+function chosen({ levelId, colour, byKeyboard = false }) {
   const level = levelById(levelId);
   if (level === null) return;
   const abandoned = game.active && game.outcome === null && game.moves.length > 0;
@@ -958,8 +958,8 @@ function chosen({ levelId, colour }) {
   syncInert();
   const human = colour === 'black' ? BLACK : colour === 'white' ? WHITE : (Math.random() < 0.5 ? WHITE : BLACK);
   beginGame({ level, human, colourPref: colour }, { abandoned });
-  // the game has begun: the keyboard is at the board (not back on <body>, or on a button behind the dialog)
-  $('board').querySelector('[role="grid"]')?.focus({ preventScroll: true });
+  // chosen from the keyboard: the game has begun, so the keyboard is at the board (not back on <body>)
+  if (byKeyboard) $('board').querySelector('[role="grid"]')?.focus({ preventScroll: true });
 }
 
 function showEndCard() {

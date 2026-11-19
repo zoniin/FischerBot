@@ -5,8 +5,9 @@
 //   chooser.open({ levelId, colour, canResume });
 //   chooser.close();
 //
-// One click on a card starts the game: onChoose({ levelId, colour }) with
-// colour 'white' | 'black' | 'random'. Escape or "Close" calls onClose().
+// One click on a card starts the game: onChoose({ levelId, colour, byKeyboard })
+// with colour 'white' | 'black' | 'random'. Escape or "Back to the game" calls
+// onClose(). No card is singled out on arrival, except the Fischer played last.
 
 const COLOURS = ['white', 'black', 'random'];
 
@@ -72,7 +73,8 @@ export class Chooser {
 
     this.#list.addEventListener('click', event => {
       const card = event.target.closest('.level');
-      if (card !== null) this.#onChoose({ levelId: card.dataset.level, colour: this.#colour });
+      // (a click with no pointer behind it - Enter or Space on the card - has detail 0)
+      if (card !== null) this.#onChoose({ levelId: card.dataset.level, colour: this.#colour, byKeyboard: event.detail === 0 });
     });
     for (const radio of this.#radios) {
       radio.addEventListener('click', () => this.#setColour(radio.dataset.colour, false));

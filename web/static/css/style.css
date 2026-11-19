@@ -474,6 +474,9 @@ button { font: inherit; color: inherit; }
 
 .opp-status #status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
+/* a move is written as it is played ("Nf3", "g3"): capitals would turn a pawn move into a piece */
+body[data-review="true"] .opp-status { text-transform: none; letter-spacing: 0.1em; color: var(--gold-bright); }
+
 .lamp {
   flex: none;
   width: 7px;
@@ -1505,6 +1508,13 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   .record { margin-top: 0; }
 }
 
+/* a small board beside the scoresheet: the controls are set tighter, so your strip keeps room for what you have taken */
+@media (min-width: 1000px) and (max-width: 1279px), (min-width: 1000px) and (max-height: 820px) {
+  .tools { gap: 5px; }
+  .tools .tool { padding-left: 8px; padding-right: 8px; font-size: 0.64rem; letter-spacing: 0.1em; }
+  .player-bar .strip { letter-spacing: 0.12em; gap: 7px; }
+}
+
 @media (max-width: 1099px) {
   .levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .chooser { width: min(900px, 100%); }
@@ -1569,7 +1579,7 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
   /* the game-over card stands up: the whole face above, the words below */
   .endcard { grid-template-columns: minmax(0, 1fr); }
-  .end-art { height: 210px; border-right: none; border-bottom: 1px solid var(--gold); }
+  .end-art { height: 228px; border-right: none; border-bottom: 1px solid var(--gold); }
   .end-art img { object-position: 50% 18%; }
   .end-body { padding: 16px 16px 16px; }
   .end-title { font-size: 1.6rem; }
@@ -1582,13 +1592,16 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 @media (max-width: 520px) {
   :root {
     --pad: 8px; --mast: 44px; --frame-pad: 5px; --state-h: 26px; --stage-top: 6px; --stage-bottom: 10px;
-    /* he gets what the board leaves: the board is as wide as the phone, and must fit with him above it */
-    --opp-h: clamp(112px, 100vh - 100vw - 176px, 196px);
-    --portrait: min(128px, var(--opp-h));
+    /* he gets what the board leaves, within limits: the bubble needs its room even on a short phone */
+    --opp-h: clamp(150px, 100vh - 100vw - 176px, 170px);
+    --portrait: 128px;
   }
   @supports (height: 100dvh) {
-    :root { --opp-h: clamp(112px, 100dvh - 100vw - 176px, 196px); }
+    :root { --opp-h: clamp(150px, 100dvh - 100vw - 176px, 170px); }
   }
+  /* what must fit in the window with the board: him, the rule, and your strip with the arrows.
+     On a short phone the row of controls may be a short scroll away; the board is never made small for it. */
+  .stage { --chrome: calc(var(--mast) + var(--stage-top) + var(--opp-h) + var(--state-h) + 56px); }
   .masthead { padding: 0 14px; }
   .masthead-title { font-size: 1.5rem; }
   .stage { gap: 10px; }
