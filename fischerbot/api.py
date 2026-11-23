@@ -17,12 +17,14 @@ from .bot import FischerBot
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 # time_budget_ms bounds the whole reply (search plus style verification).
+# It is also what one request can cost the server, and anyone can send one:
+# no setting thinks for more than four seconds.
 # style_margin_cp caps what a Fischer-like move may cost against the engine's
 # first choice; the style model usually asks for much less.
 DIFFICULTIES = {
     "easy": {"time_budget_ms": 700, "max_depth": 3, "style_margin_cp": 60},
     "medium": {"time_budget_ms": 2500, "max_depth": 64, "style_margin_cp": 40},
-    "hard": {"time_budget_ms": 6000, "max_depth": 64, "style_margin_cp": 30},
+    "hard": {"time_budget_ms": 4000, "max_depth": 64, "style_margin_cp": 30},
 }
 
 # The four Fischers of the web page (LEVELS in web/static/js/bot.js). The
@@ -32,11 +34,20 @@ DIFFICULTIES = {
 LEVELS = {
     "prodigy": {"time_budget_ms": 1500, "max_depth": 4, "style_margin_cp": 60, "book_year": 1956},
     "grandmaster": {"time_budget_ms": 2500, "max_depth": 7, "style_margin_cp": 50, "book_year": 1958},
-    "champion": {"time_budget_ms": 4000, "max_depth": 64, "style_margin_cp": 40, "book_year": 1963},
-    "world": {"time_budget_ms": 6000, "max_depth": 64, "style_margin_cp": 30,
+    "champion": {"time_budget_ms": 3000, "max_depth": 64, "style_margin_cp": 40, "book_year": 1963},
+    "world": {"time_budget_ms": 4000, "max_depth": 64, "style_margin_cp": 30,
               "book_year": 1972, "book_later": True},
 }
 _SETTINGS = {**DIFFICULTIES, **LEVELS}
+
+# Requests for one setting take turns at its bot. One that has waited this
+# long is told the server is busy, rather than left in a queue of any length.
+BUSY_WAIT_S = 8.0
+
+# The portrait and the pieces may be kept by a browser for a day; scripts,
+# styles and data are checked against the server on every visit, so that a
+# page is never assembled from two versions of the site.
+IMAGE_MAX_AGE_S = 24 * 60 * 60
 
 MAX_HISTORY = 1024  # longest legal chess games are far below this
 MAX_BODY_BYTES = 64 * 1024  # a history of MAX_HISTORY moves is under 10 kB of JSON
@@ -131,6 +142,10 @@ def create_app() -> Flask:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if request.path.startswith("/static/img/") and response.status_code == 200:
+            response.cache_control.no_cache = None
+            response.cache_control.public = True
+            response.cache_control.max_age = IMAGE_MAX_AGE_S
         return response
 
     @app.get("/api/health")
@@ -177,8 +192,12 @@ def create_app() -> Flask:
             })
 
         bot, lock = _get_bot(setting)
-        with lock:
+        if not lock.acquire(timeout=BUSY_WAIT_S):
+            return jsonify({"error": "The server is busy. Try again in a moment."}), 503
+        try:
             choice = bot.choose(board)
+        finally:
+            lock.release()
         board.push(choice.move)
 
         payload = {

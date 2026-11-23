@@ -165,7 +165,10 @@ POST /api/move
 
 The endpoint is stateless (the client sends the whole game each time) and is
 used only when the Web Worker cannot start. It runs the Python engine, which
-is much weaker. The repository deploys to Vercel as it is (`api/index.py`).
+is much weaker. It has no rate limit: a request can cost the server up to
+four seconds of thinking, requests for one level take turns, and one that
+would wait too long is told the server is busy. The repository deploys to
+Vercel as it is (`api/index.py`).
 
 ## Development
 

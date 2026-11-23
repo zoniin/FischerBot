@@ -767,6 +767,43 @@ class TestApi:
         finally:
             mimetypes.add_type("text/javascript", ".js")
 
+    def test_a_busy_server_says_so_instead_of_queueing(self, client, monkeypatch):
+        """Requests for one level take turns at its bot; one that cannot have its turn soon gets a 503."""
+        from fischerbot import api
+        client.post("/api/move", json={"history": [], "level": "prodigy"})     # the bot exists now
+        _bot, lock = api._get_bot("prodigy")
+        monkeypatch.setattr(api, "BUSY_WAIT_S", 0.05)
+        assert lock.acquire(timeout=1)
+        try:
+            r = client.post("/api/move", json={"history": ["a2a3", "e7e5", "h2h3"], "level": "prodigy"})
+            assert r.status_code == 503 and "busy" in r.get_json()["error"].lower()
+            other = client.post("/api/move", json={"history": [], "level": "grandmaster"})
+            assert other.status_code == 200, "another level has its own bot"
+        finally:
+            lock.release()
+        r = client.post("/api/move", json={"history": ["a2a3", "e7e5", "h2h3"], "level": "prodigy"})
+        assert r.status_code == 200, "and it is not left locked"
+
+    def test_no_setting_thinks_for_long(self):
+        """What one anonymous request can cost: the time budget of the slowest setting."""
+        from fischerbot import api
+        for name, setting in {**api.DIFFICULTIES, **api.LEVELS}.items():
+            assert setting["time_budget_ms"] <= 4000, name
+
+    def test_images_may_be_cached_but_code_and_data_are_always_checked(self, client):
+        image = client.get("/static/img/pieces/wK.svg")
+        assert image.status_code == 200
+        assert image.cache_control.max_age == 24 * 60 * 60 and image.cache_control.public
+        assert not image.cache_control.no_cache
+        image.close()
+        for url in ("/static/js/app.js", "/static/css/style.css", "/static/data/style.json"):
+            r = client.get(url)
+            assert r.cache_control.no_cache and not r.cache_control.max_age, url
+            assert r.headers.get("ETag"), url
+            r.close()
+        missing = client.get("/static/img/nothing.png")
+        assert missing.status_code == 404 and not missing.cache_control.max_age
+
     def test_security_headers_present(self, client):
         r = client.get("/api/health")
         assert "Content-Security-Policy" in r.headers
