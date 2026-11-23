@@ -251,6 +251,11 @@ export function eventsForBotMove({
   if (playerMove?.check) add('player_check', 'sometimes');
   if (playerMove?.castle) add('player_castles', 'sometimes');
 
+  // The general pool is offered on any move of any game, so it holds only
+  // quotations that make sense at any moment. One that needs its moment (an
+  // endgame, an advantage, a gambit, a lost game) is filed under that moment's
+  // category and nowhere else: "They don't give medals for endgame technique!"
+  // was once said here at move five.
   add('quotes', 'sometimes');
 
   // what to remember for the next move

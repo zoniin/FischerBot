@@ -42,7 +42,9 @@ _SETTINGS = {**DIFFICULTIES, **LEVELS}
 
 # Requests for one setting take turns at its bot. One that has waited this
 # long is told the server is busy, rather than left in a queue of any length.
-BUSY_WAIT_S = 8.0
+# With the four seconds of the slowest setting a request that is served takes
+# at most about eight - inside the ten that a hosted function is allowed.
+BUSY_WAIT_S = 4.0
 
 # The portrait, the pieces and the typeface may be kept by a browser for a
 # day; scripts, styles and data are checked against the server on every
@@ -103,15 +105,27 @@ def _replay(history) -> chess.Board:
 
 
 def _status(board: chess.Board) -> str:
+    """How the game stands: "playing", or how it has ended.
+
+    The same rules, in the same order, as the page (outcomeOf in
+    web/static/js/events.js): checkmate, stalemate, insufficient material, and
+    the two draws by the clock of the game once they have really happened -
+    fifty moves by each side without a capture or a pawn move, or the position
+    on the board for the third time. Nothing is claimed on anyone's behalf
+    before that: a draw that could merely be claimed (a move that would
+    repeat the position, say) does not end the game, and the bot plays on -
+    the page would otherwise be told there is no move in a game that it still
+    shows as going on.
+    """
     if board.is_checkmate():
         return "checkmate_black" if board.turn == chess.WHITE else "checkmate_white"
     if board.is_stalemate():
         return "stalemate"
     if board.is_insufficient_material():
         return "insufficient_material"
-    if board.can_claim_fifty_moves():
+    if board.halfmove_clock >= 100:
         return "fifty_moves"
-    if board.can_claim_threefold_repetition():
+    if board.is_repetition(3):
         return "repetition"
     return "playing"
 
@@ -185,10 +199,11 @@ def create_app() -> Flask:
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
-        if board.is_game_over(claim_draw=True):
+        status = _status(board)
+        if status != "playing":
             return jsonify({
                 "fen": board.fen(),
-                "status": _status(board),
+                "status": status,
                 "bot_move": None,
                 "legal_moves": [],
             })

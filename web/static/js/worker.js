@@ -23,7 +23,10 @@
 // Nothing is ever dropped, and no failure goes unanswered: whatever is thrown
 // while serving a request comes back as an 'error' with that request's id.
 // (A search cannot be interrupted: a 'move' is always answered, even if the page
-// has lost interest in it meanwhile. The page ignores answers whose id is stale.)
+// has lost interest in it meanwhile. The page ignores answers whose id is stale -
+// and, so that questions nobody wants do not queue up here in front of the one
+// that matters, engine-client.js posts a 'move' only when the last one has been
+// answered, and then only the latest question it has.)
 //
 // The protocol lives in BotHost, which knows nothing about workers: it is handed
 // a `post` function and a `load` function and can be driven from a Node test.

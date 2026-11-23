@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "Lines marked with a quote are Bobby Fischer's own words, with their source. Everything else was written for the bot and is not a quotation. A line with \"since\" refers to something that had not happened before that year.",
+ "about": "Lines marked with a quote are Bobby Fischer's own words, with their source. Everything else was written for the bot and is not a quotation. A line with \"since\" refers to something that had not happened before that year. A line with \"as\" is said only when he has the pieces of that colour.",
  "categories": {
   "start_as_white": [
    {
@@ -686,21 +686,24 @@
     "quote": {
      "source": "“A Bust to the King’s Gambit”, American Chess Quarterly",
      "year": 1961
-    }
+    },
+    "as": "black"
    },
    {
     "text": "Of course White can always play differently, in which case he merely loses differently.",
     "quote": {
      "source": "“A Bust to the King’s Gambit”, American Chess Quarterly",
      "year": 1961
-    }
+    },
+    "as": "black"
    },
    {
     "text": "The refutation of any gambit begins with accepting it.",
     "quote": {
      "source": "“A Bust to the King’s Gambit”, American Chess Quarterly",
      "year": 1961
-    }
+    },
+    "as": "black"
    },
    {
     "text": "I once wrote an article about the King's Gambit. It wasn't kind.",
@@ -1736,6 +1739,14 @@
     }
    },
    {
+    "text": "While trying to figure out what was going on in Spassky’s head, I blundered and lost the game!",
+    "quote": {
+     "source": "My 60 Memorable Games, game 18",
+     "year": 1969
+    },
+    "since": 1960
+   },
+   {
     "text": "You're winning. You still have to win it."
    },
    {
@@ -2242,27 +2253,6 @@
   ],
   "quotes": [
    {
-    "text": "As usual, tactics flow from a positionally superior game.",
-    "quote": {
-     "source": "My 60 Memorable Games, game 1",
-     "year": 1969
-    }
-   },
-   {
-    "text": "In top-flight chess, you have to drive your advantage home unmercifully.",
-    "quote": {
-     "source": "My 60 Memorable Games, game 32",
-     "year": 1969
-    }
-   },
-   {
-    "text": "They don’t give medals for endgame technique!",
-    "quote": {
-     "source": "My 60 Memorable Games, game 35",
-     "year": 1969
-    }
-   },
-   {
     "text": "But a half-dozen moves, in chess, can be a lifetime.",
     "quote": {
      "source": "My 60 Memorable Games, game 27",
@@ -2275,21 +2265,6 @@
      "source": "My 60 Memorable Games, game 47",
      "year": 1969
     }
-   },
-   {
-    "text": "The refutation of any gambit begins with accepting it.",
-    "quote": {
-     "source": "“A Bust to the King’s Gambit”, American Chess Quarterly",
-     "year": 1961
-    }
-   },
-   {
-    "text": "While trying to figure out what was going on in Spassky’s head, I blundered and lost the game!",
-    "quote": {
-     "source": "My 60 Memorable Games, game 18",
-     "year": 1969
-    },
-    "since": 1960
    }
   ]
  }

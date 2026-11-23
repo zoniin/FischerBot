@@ -637,6 +637,7 @@ class TestCommentary:
             assert line["text"].strip() and len(line["text"]) <= 170, (category, line["text"])
             assert set(re.findall(r"\{(\w+)\}", line["text"])) <= allowed, (category, line["text"])
             assert line.get("mood", "neutral") in {"neutral", "pleased", "annoyed", "thinking", "surprised"}
+            assert line.get("as") in (None, "white", "black"), (category, line["text"])
             if "quote" in line:
                 assert "{" not in line["text"], "a real quotation is never a template"
 
@@ -826,6 +827,125 @@ class TestApi:
         from fischerbot import api
         for name, setting in {**api.DIFFICULTIES, **api.LEVELS}.items():
             assert setting["time_budget_ms"] <= 4000, name
+
+    def test_a_served_request_fits_a_ten_second_function(self):
+        """Waiting for its turn and then thinking: at most about 4 + 4 seconds, with room to spare."""
+        from fischerbot import api
+        assert api.BUSY_WAIT_S == 4.0
+        slowest = max(setting["time_budget_ms"] for setting in {**api.DIFFICULTIES, **api.LEVELS}.values())
+        assert api.BUSY_WAIT_S + slowest / 1000 <= 8.0 < 10
+
+    # --- the server ends a game where the page does (outcomeOf in web/static/js/events.js), no earlier ---
+
+    SHUFFLE = ["g1f3", "g8f6", "f3g1", "f6g8"]       # back to the position it started from
+
+    def test_a_draw_that_could_only_be_claimed_does_not_stop_the_bot(self, client):
+        """The report from the review: Black could repeat for the third time, nobody has - the game goes on."""
+        history = ["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"]
+        board = chess.Board()
+        for uci in history:
+            board.push_uci(uci)
+        assert board.can_claim_threefold_repetition() and not board.is_repetition(3)
+        assert board.is_game_over(claim_draw=True) and not board.is_game_over()
+        for level in ("prodigy", "world"):
+            r = client.post("/api/move", json={"history": history, "level": level})
+            assert r.status_code == 200
+            data = r.get_json()
+            assert data["bot_move"] is not None, "he plays on"
+            after = board.copy()
+            after.push_uci(data["bot_move"])            # raises if it were not legal
+            assert data["fen"] == after.fen()
+            # ... and if his move is the one that repeats, the reply says that the game is now over
+            assert data["status"] == ("repetition" if after.is_repetition(3) else "playing")
+            assert (data["bot_move"] == "f6g8") == (data["status"] == "repetition")
+
+    def test_the_third_occurrence_of_a_position_ends_the_game(self, client):
+        twice = self.SHUFFLE * 2            # the starting position for the third time, White to move
+        board = chess.Board()
+        for uci in twice:
+            board.push_uci(uci)
+        assert board.is_repetition(3)
+        r = client.post("/api/move", json={"history": twice, "level": "prodigy"})
+        assert r.status_code == 200
+        assert r.get_json() == {"fen": board.fen(), "status": "repetition", "bot_move": None, "legal_moves": []}
+        # one move earlier it was only the second time: he moves
+        r = client.post("/api/move", json={"history": twice[:-1], "level": "prodigy"})
+        assert r.get_json()["bot_move"] is not None
+
+    def test_status_follows_the_page_on_both_sides_of_each_line(self):
+        """python-chess is the reference; the page's rules are the same ones (web/tests/events.test.js)."""
+        from fischerbot.api import _status
+
+        # threefold repetition: claimable is not yet a draw, the third occurrence is
+        board = chess.Board()
+        for uci in ["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"]:
+            board.push_uci(uci)
+        assert board.can_claim_threefold_repetition()
+        assert _status(board) == "playing"
+        board.push_uci("f6g8")
+        assert board.is_repetition(3) and _status(board) == "repetition"
+
+        # fifty moves: 99 half-moves (a draw could be claimed with the next move) is not yet a draw, 100 is
+        almost = chess.Board("8/8/4k3/8/8/3RK3/8/8 w - - 99 80")
+        assert almost.can_claim_fifty_moves() and not almost.is_fifty_moves()
+        assert _status(almost) == "playing"
+        full = chess.Board("8/8/4k3/8/8/3RK3/8/8 b - - 100 80")
+        assert full.is_fifty_moves() and _status(full) == "fifty_moves"
+        assert _status(chess.Board("8/8/4k3/8/8/3RK3/8/8 b - - 120 90")) == "fifty_moves"
+        # ... but a mate delivered with the hundredth half-move is a mate
+        mate = chess.Board("7k/6Q1/6K1/8/8/8/8/8 b - - 100 90")
+        assert mate.is_checkmate() and _status(mate) == "checkmate_white"
+
+        # checkmate, stalemate, insufficient material - and the positions next to them
+        assert _status(chess.Board("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1")) == "checkmate_white"
+        assert _status(chess.Board("7k/5Q2/6K1/8/8/8/8/8 w - - 0 1")) == "playing", "mate in one is not mate"
+        fools = chess.Board()
+        for uci in ["f2f3", "e7e5", "g2g4", "d8h4"]:
+            fools.push_uci(uci)
+        assert _status(fools) == "checkmate_black"
+        assert _status(chess.Board("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1")) == "stalemate"
+        assert _status(chess.Board("7k/8/5K2/6Q1/8/8/8/8 b - - 0 1")) == "playing", "the king has a square"
+        assert _status(chess.Board("8/8/4k3/8/8/3NK3/8/8 w - - 0 1")) == "insufficient_material"
+        assert _status(chess.Board("8/8/4k3/8/8/3BK3/8/8 b - - 0 1")) == "insufficient_material"
+        assert _status(chess.Board("8/8/4k3/8/8/3PK3/8/8 w - - 0 1")) == "playing", "a pawn is enough to play on"
+        assert _status(chess.Board()) == "playing"
+
+    def test_the_server_plays_on_exactly_as_long_as_the_status_says(self, client, monkeypatch):
+        """For every kind of ending: no move when it is over, a move in the position beside it."""
+        from fischerbot import api
+
+        def at(fen):
+            # the API replays a history from the usual start: put the position under test in its place
+            monkeypatch.setattr(api, "_replay", lambda history: chess.Board(fen))
+            r = client.post("/api/move", json={"history": [], "level": "prodigy"})
+            assert r.status_code == 200, fen
+            return r.get_json()
+
+        over = {
+            "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1": "checkmate_white",
+            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1": "stalemate",
+            "8/8/4k3/8/8/3NK3/8/8 w - - 0 1": "insufficient_material",
+            "8/8/4k3/8/8/3RK3/8/8 b - - 100 80": "fifty_moves",
+        }
+        for fen, status in over.items():
+            assert at(fen) == {"fen": fen, "status": status, "bot_move": None, "legal_moves": []}
+        going = [
+            "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1",          # mate in one, to be played
+            "7k/8/5K2/6Q1/8/8/8/8 b - - 0 1",          # not stalemate
+            "8/8/4k3/8/8/3PK3/8/8 w - - 0 1",          # king and pawn
+            "8/8/4k3/8/8/3RK3/8/8 w - - 99 80",        # the hundredth half-move is still to be played
+            "8/8/4k3/8/8/3RK3/8/8 b - - 99 80",
+        ]
+        for fen in going:
+            data = at(fen)
+            assert data["bot_move"] is not None, fen
+            board = chess.Board(fen)
+            board.push_uci(data["bot_move"])             # raises if it were not legal
+            assert data["fen"] == board.fen()
+            assert data["status"] == api._status(board)
+        assert at("7k/5Q2/6K1/8/8/8/8/8 w - - 0 1")["status"] == "checkmate_white", "and he finds the mate"
+        # with the ninety-ninth half-move behind him, his own quiet move completes the fifty
+        assert at("8/8/4k3/8/8/3RK3/8/8 b - - 99 80")["status"] == "fifty_moves"
 
     def test_images_may_be_cached_but_code_and_data_are_always_checked(self, client):
         image = client.get("/static/img/pieces/wK.svg")

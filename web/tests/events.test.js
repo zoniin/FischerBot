@@ -336,3 +336,28 @@ test('a memory of the wrong shape (a damaged save) is repaired, not trusted', ()
   assert.ok(categories(events).includes('bot_winning'));
   assert.deepEqual(memory.tides, ['bot_better', 'bot_winning']);
 });
+
+// ---------------------------------------------------------------------------
+// Regressions from the last review before the site went live
+// ---------------------------------------------------------------------------
+
+test('the page ends a game on the same positions as the server, and on no others', () => {
+  // the other half is tests/test_data_book_style.py (test_status_follows_the_page_on_both_sides_of_each_line):
+  // the same positions, judged there by fischerbot/api.py with python-chess
+  const kind = fen => outcomeOf(new Position(fen))?.kind ?? null;
+  assert.equal(kind('8/8/4k3/8/8/3RK3/8/8 w - - 99 80'), null, 'ninety-nine half-moves: a draw could be claimed, none has occurred');
+  assert.equal(kind('8/8/4k3/8/8/3RK3/8/8 b - - 100 80'), 'fifty');
+  assert.equal(kind('8/8/4k3/8/8/3RK3/8/8 b - - 120 90'), 'fifty');
+  assert.equal(kind('7k/6Q1/6K1/8/8/8/8/8 b - - 100 90'), 'checkmate', 'a mate with the hundredth half-move is a mate');
+  assert.equal(kind('7k/6Q1/6K1/8/8/8/8/8 b - - 0 1'), 'checkmate');
+  assert.equal(kind('7k/5Q2/6K1/8/8/8/8/8 w - - 0 1'), null, 'mate in one is not mate');
+  assert.equal(kind('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1'), 'stalemate');
+  assert.equal(kind('7k/8/5K2/6Q1/8/8/8/8 b - - 0 1'), null, 'the king has a square');
+  assert.equal(kind('8/8/4k3/8/8/3NK3/8/8 w - - 0 1'), 'insufficient');
+  assert.equal(kind('8/8/4k3/8/8/3BK3/8/8 b - - 0 1'), 'insufficient');
+  assert.equal(kind('8/8/4k3/8/8/3PK3/8/8 w - - 0 1'), null, 'a pawn is enough to play on');
+  // the game from the review: Black could repeat for the third time and has not
+  const shuffle = ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1'];
+  assert.equal(outcomeOf(Position.fromMoves(shuffle)), null);
+  assert.equal(outcomeOf(Position.fromMoves([...shuffle, 'f6g8'])).kind, 'repetition');
+});

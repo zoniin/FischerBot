@@ -22,8 +22,11 @@
 // quotation is never said twice); an 'always' event is always spoken; the
 // others are thinned out and never come from the same category two moves
 // running; real quotations are spaced at least six moves apart; a line marked
-// `since` is not said by a Fischer younger than that year; a category with
-// nothing left to say falls back to its plainer relative (FALLBACKS).
+// `since` is not said by a Fischer younger than that year, and one marked
+// `as: 'white' | 'black'` only when he has those pieces ("Of course White can
+// always play differently, in which case he merely loses differently" is not
+// for the game in which he is White); a category with nothing left to say
+// falls back to its plainer relative (FALLBACKS).
 
 export const FREQUENCY = Object.freeze({ always: 1, often: 2 / 3, sometimes: 1 / 4 });
 
@@ -84,8 +87,18 @@ export function fillTemplate(text, vars = {}) {
   return complete ? filled : null;
 }
 
-/** A sentence must start with a capital even when it starts with a variable ("the U.S. ..."). */
-function capitalise(text) {
+/**
+ * A pawn move or a square at the start of a line: "e4", "exd5", "e8=Q", "bxa8=N+".
+ * (Castling and piece moves begin with a capital already.)
+ */
+const STARTS_WITH_A_MOVE = /^[a-h](?:x[a-h])?[1-8](?![A-Za-z0-9])/;
+
+/**
+ * A sentence must start with a capital even when it starts with a variable
+ * ("the U.S. ...") - but a move is written as it is: "e4.", never "E4.".
+ */
+export function capitalise(text) {
+  if (STARTS_WITH_A_MOVE.test(text)) return text;
   return text.replace(/^([a-z])/, letter => letter.toUpperCase());
 }
 
@@ -97,6 +110,7 @@ export class Commentator {
   #lastSpokenPly = -Infinity;
   #lastQuotePly = -Infinity;
   #year = null;
+  #side = null;            // the colour he has in this game ('white' | 'black'), for lines marked `as`
 
   /**
    * @param {object} data            the parsed commentary.json ({ categories })
@@ -121,13 +135,17 @@ export class Commentator {
     return (this.#categories.get(category) ?? []).length > 0;
   }
 
-  /** A new game: everything may be said again. `year` is the level's (for lines marked `since`). */
-  newGame({ year = null } = {}) {
+  /**
+   * A new game: everything may be said again. `year` is the level's (for lines marked `since`),
+   * `side` the colour he has ('white' | 'black', for lines marked `as`).
+   */
+  newGame({ year = null, side = null } = {}) {
     this.#used.clear();
     this.#lastCategory = null;
     this.#lastSpokenPly = -Infinity;
     this.#lastQuotePly = -Infinity;
     this.#year = Number.isFinite(year) ? year : null;
+    this.#side = side === 'white' || side === 'black' ? side : null;
   }
 
   /** What must survive a page reload, as plain JSON. */
@@ -138,11 +156,12 @@ export class Commentator {
       lastSpokenPly: Number.isFinite(this.#lastSpokenPly) ? this.#lastSpokenPly : null,
       lastQuotePly: Number.isFinite(this.#lastQuotePly) ? this.#lastQuotePly : null,
       year: this.#year,
+      side: this.#side,
     };
   }
 
   restore(saved) {
-    this.newGame({ year: saved?.year ?? null });
+    this.newGame({ year: saved?.year ?? null, side: saved?.side ?? null });
     if (saved === null || typeof saved !== 'object') return;
     // (older saves keyed a line as "category\ntext": the text is what counts)
     if (Array.isArray(saved.used)) {
@@ -212,6 +231,7 @@ export class Commentator {
       const isQuote = line.quote !== null && typeof line.quote === 'object';
       if (isQuote && !quotesAllowed) continue;
       if (Number.isFinite(line.since) && this.#year !== null && this.#year < line.since) continue;
+      if ((line.as === 'white' || line.as === 'black') && this.#side !== null && line.as !== this.#side) continue;
       if (this.#used.has(line.text)) continue;
       // a real quotation is his words exactly: it is never filled in or altered
       const text = isQuote ? (/\{\w+\}/.test(line.text) ? null : line.text)
