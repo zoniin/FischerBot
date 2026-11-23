@@ -977,6 +977,21 @@ class TestApi:
         again = client.get("/static/js/app.js", headers={"If-None-Match": etag})
         assert again.status_code == 304 and again.cache_control.no_cache
 
+    def test_the_hosted_rewrite_reaches_the_right_page(self, client):
+        """vercel.json sends every request to /api/index?__path=/<path>: the app must route <path>."""
+        page = client.get("/api/index?__path=/")
+        assert page.status_code == 200 and "<title>FischerBot" in page.get_data(as_text=True)
+        script = client.get("/api/index?__path=/static/js/app.js")
+        assert script.status_code == 200 and script.headers["Content-Type"].startswith("text/javascript")
+        script.close()
+        assert client.get("/api/index?__path=/api/health").get_json()["status"] == "healthy"
+        r = client.post("/api/index?__path=/api/move", json={"history": ["e2e4"], "level": "world"})
+        assert r.status_code == 200 and r.get_json()["bot_move"]
+        assert client.get("/api/index?__path=/&level=world").status_code == 200
+        missing = client.get("/api/index?__path=/nothing-here")
+        assert missing.status_code == 404 and missing.get_json()["path"] == "/nothing-here"
+        assert client.get("/").status_code == 200, "without the parameter nothing changes"
+
     def test_security_headers_present(self, client):
         r = client.get("/api/health")
         assert "Content-Security-Policy" in r.headers

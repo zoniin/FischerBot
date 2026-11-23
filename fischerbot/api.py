@@ -8,6 +8,7 @@ on a laptop and on serverless hosting (no in-memory session store to lose).
 import mimetypes
 import threading
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlencode
 
 import chess
 from flask import Flask, jsonify, request
@@ -130,6 +131,33 @@ def _status(board: chess.Board) -> str:
     return "playing"
 
 
+class OriginalPath:
+    """WSGI middleware for the hosted site: the path that was asked for.
+
+    vercel.json rewrites every request to the one function at /api/index and
+    passes the requested path as ?__path=/...; the function itself is given
+    /api/index (or similar), which would make every page "Not found". This
+    puts the requested path back. A request without the parameter is left
+    exactly as it is, so it changes nothing when the app runs anywhere else.
+    """
+
+    PARAM = "__path"
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        query = environ.get("QUERY_STRING", "")
+        if self.PARAM in query:
+            pairs = parse_qsl(query, keep_blank_values=True)
+            asked = [value for key, value in pairs if key == self.PARAM]
+            if asked:
+                environ["PATH_INFO"] = "/" + unquote(asked[0]).lstrip("/")
+                environ["SCRIPT_NAME"] = ""
+                environ["QUERY_STRING"] = urlencode([(k, v) for k, v in pairs if k != self.PARAM])
+        return self.wsgi_app(environ, start_response)
+
+
 def create_app() -> Flask:
     for extension, content_type in STATIC_TYPES.items():
         mimetypes.add_type(content_type, extension)
@@ -140,6 +168,7 @@ def create_app() -> Flask:
         static_url_path="/static",
     )
     app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
+    app.wsgi_app = OriginalPath(app.wsgi_app)
 
     @app.get("/")
     def index():
@@ -246,7 +275,8 @@ def create_app() -> Flask:
 
     @app.errorhandler(404)
     def not_found(_e):
-        return jsonify({"error": "Not found"}), 404
+        # the path the app was given: tells a misrouted deployment from a missing file
+        return jsonify({"error": "Not found", "path": request.path}), 404
 
     @app.errorhandler(413)
     def too_large(_e):
