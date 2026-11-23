@@ -1,7 +1,8 @@
 // opponent.js: the pure parts (how a source is typeset, the apostrophes of a bot line).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attribution, quoted, sourceParts, typographic } from '../static/js/opponent.js';
+import { attribution, quoted, sourceParts, stampFor, typographic } from '../static/js/opponent.js';
+import { LEVELS } from '../static/js/bot.js';
 import { staticData } from './helpers.js';
 
 test('attribution names him, the source and the year', () => {
@@ -80,4 +81,51 @@ test('no quotation in the shipped commentary is typeset with nested double marks
     }
   }
   assert.ok(seen > 10);
+});
+
+test('a quotation later than the Fischer who says it is stamped "as he later wrote"', () => {
+  const book = { source: 'My 60 Memorable Games, game 45', year: 1969 };
+  const article = { source: '“A Bust to the King’s Gambit”, American Chess Quarterly', year: 1961 };
+  const own = { later: false, tag: 'His own words', spoken: 'Fischer, in his own words' };
+  const later = { later: true, tag: 'As he later wrote', spoken: 'Fischer, as he later wrote' };
+  assert.deepEqual(stampFor(book, 1956), later);
+  assert.deepEqual(stampFor(book, 1958), later);
+  assert.deepEqual(stampFor(book, 1963), later);
+  assert.deepEqual(stampFor(book, 1972), own);
+  assert.deepEqual(stampFor(article, 1956), later);
+  assert.deepEqual(stampFor(article, 1958), later);
+  assert.deepEqual(stampFor(article, 1963), own);
+  assert.deepEqual(stampFor(article, 1972), own);
+  assert.deepEqual(stampFor(book, 1969), own, 'the year itself is not later');
+  assert.deepEqual(stampFor(book, 1968), later);
+  // nothing known, nothing changed
+  assert.deepEqual(stampFor(book, null), own);
+  assert.deepEqual(stampFor(book, undefined), own);
+  assert.deepEqual(stampFor({ source: 'Chess Life', year: null }, 1956), own);
+  assert.deepEqual(stampFor({ source: 'Chess Life' }, 1956), own);
+  assert.deepEqual(stampFor(null, 1956), own);
+  assert.deepEqual(stampFor({ source: 'x', year: '1969' }, 1956), later, 'a year read back from storage as text still counts');
+});
+
+test('every shipped quotation gets one stamp or the other at each of the four levels', () => {
+  const data = staticData('commentary.json');
+  const years = LEVELS.map(level => level.year);
+  assert.deepEqual(years, [1956, 1958, 1963, 1972]);
+  const counts = Object.fromEntries(years.map(year => [year, { own: 0, later: 0 }]));
+  const seen = new Set();
+  for (const lines of Object.values(data.categories)) {
+    for (const line of lines) {
+      if (!line.quote || seen.has(line.text)) continue;
+      seen.add(line.text);
+      assert.ok(Number.isFinite(line.quote.year), `"${line.text}" has a year`);
+      for (const year of years) {
+        const stamp = stampFor(line.quote, year);
+        assert.equal(stamp.later, line.quote.year > year);
+        counts[year][stamp.later ? 'later' : 'own'] += 1;
+      }
+    }
+  }
+  assert.ok(seen.size > 0);
+  assert.equal(counts[1972].later, 0, 'the champion of 1972 had written all of it');
+  assert.equal(counts[1956].own, 0, 'the boy of 1956 had written none of it');
 });

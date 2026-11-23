@@ -14,6 +14,8 @@
 // is typed out quickly, stays bright while it is news, and then recedes
 // ("rest") but can still be read. A real quotation is typeset as one -
 // quotation marks, source, "his own words" - and a line of the bot's never is.
+// He is one of four Fischers (setYear): words he wrote after that year are
+// stamped "as he later wrote" instead.
 
 const TYPE_MS_PER_CHAR = 20;
 const TYPE_MS_MAX = 1500;
@@ -29,6 +31,21 @@ export function attribution(quote) {
   if (quote?.source) parts.push(quote.source);
   if (quote?.year) parts.push(String(quote.year));
   return `— ${parts.join(', ')}`;
+}
+
+/**
+ * The stamp a quotation carries. They are his own words - but the Fischer of 1956 cannot be quoting a book of
+ * 1969: when the quotation is later than the year of the Fischer who says it, the stamp says so.
+ * @param {?{year: ?number}} quote
+ * @param {?number} levelYear  the year of the Fischer being played (null: not known, nothing changes)
+ * @returns {{ later: boolean, tag: string, spoken: string }}  the stamp, and how a screen reader introduces the line
+ */
+export function stampFor(quote, levelYear) {
+  const year = Number(quote?.year);
+  const later = Number.isFinite(year) && year > 0 && Number.isFinite(levelYear) && year > levelYear;
+  return later
+    ? { later, tag: 'As he later wrote', spoken: 'Fischer, as he later wrote' }
+    : { later, tag: 'His own words', spoken: 'Fischer, in his own words' };
 }
 
 /**
@@ -77,6 +94,8 @@ export class Opponent {
   #said;
   #text;
   #source;
+  #tag;
+  #year = null;            // which Fischer he is (the level's year), for the stamp on a quotation
   #reduced;
   #frame = 0;
   #restTimer = 0;
@@ -94,12 +113,18 @@ export class Opponent {
     this.#said = said;
     this.#text = text;
     this.#source = source;
+    this.#tag = bubble.querySelector('.bubble-tag');
     this.#reduced = typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
     // the bubble's place changes size with the window: a line that fitted may need refitting
     if (typeof ResizeObserver === 'function' && bubble.parentElement) {
       new ResizeObserver(() => this.#fit()).observe(bubble.parentElement);
     }
+  }
+
+  /** Which of the four Fischers he is: a quotation later than that year is stamped "as he later wrote". */
+  setYear(year) {
+    this.#year = Number.isFinite(year) ? year : null;
   }
 
   /** While he calculates the photograph leans in (CSS on data-thinking). */
@@ -208,11 +233,14 @@ export class Opponent {
     this.#bubble.dataset.kind = isQuote ? 'quote' : 'line';
     this.#bubble.dataset.long = String(isQuote && line.text.length > LONG_QUOTE);
     this.#bubble.dataset.typed = 'false';
+    const stamp = isQuote ? stampFor(line.quote, this.#year) : null;
+    this.#bubble.dataset.stamp = stamp === null ? 'none' : stamp.later ? 'later' : 'own';
+    if (stamp !== null && this.#tag !== null) this.#tag.textContent = stamp.tag;
 
     // for screen readers the whole line at once, and plainly which kind it is
     if (!instant) {
       this.#said.textContent = isQuote
-        ? `Fischer, in his own words: ${shown} ${attribution(line.quote)}`
+        ? `${stamp.spoken}: ${shown} ${attribution(line.quote)}`
         : `Fischer says: ${shown}`;
     }
 

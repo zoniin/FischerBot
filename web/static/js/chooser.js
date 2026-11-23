@@ -3,7 +3,7 @@
 //
 //   const chooser = new Chooser(root, { levels, posterUrl, onChoose, onClose });
 //   chooser.open({ levelId, colour, canResume });
-//   chooser.close();
+//   chooser.close();                 // hands the focus back to whatever opened it ({ refocus: false }: does not)
 //
 // One click on a card starts the game: onChoose({ levelId, colour, byKeyboard })
 // with colour 'white' | 'black' | 'random'. Escape or "Back to the game" calls
@@ -112,12 +112,16 @@ export class Chooser {
     (target ?? this.#dialog).focus({ preventScroll: true });
   }
 
-  close() {
+  /**
+   * Hides the dialog and hands the focus back to the control that opened it. The page behind must already
+   * accept the focus (not be inert) when this is called, or the focus is left on <body>.
+   */
+  close({ refocus = true } = {}) {
     if (!this.isOpen) return;
     this.#root.hidden = true;
     const back = this.#returnFocus;
     this.#returnFocus = null;
-    if (back !== null && typeof back.focus === 'function' && document.contains(back)) back.focus({ preventScroll: true });
+    if (refocus && back !== null && typeof back.focus === 'function' && document.contains(back)) back.focus({ preventScroll: true });
   }
 
   #card(level, index, posterUrl) {

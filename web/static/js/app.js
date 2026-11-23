@@ -9,8 +9,11 @@
 //   sound.js, pgn.js  what they say
 //
 // Debug hooks, harmless in production: ?fen=<FEN> and/or ?moves=e2e4,e7e5 start
-// a game from that position (with ?level=<id> and ?color=white|black), and
-// <body> carries data-phase / data-ply / data-engine for tests to wait on.
+// a game from that position (with ?level=<id> and ?color=white|black; link.js
+// reads them), and <body> carries data-phase / data-ply / data-engine for tests
+// to wait on. A game opened from such a link is not the visitor's own until
+// they have made a move in it: until then it is not saved, and the game they
+// had saved is left alone.
 
 import { Position, Move, STARTING_FEN, WHITE, BLACK, PAWN } from './rules.js';
 import { LEVELS } from './bot.js';
@@ -23,8 +26,9 @@ import {
 import { buildPgn, resultText } from './pgn.js';
 import { EngineClient } from './engine-client.js';
 import { Sound } from './sound.js';
-import { Opponent, attribution, typographic } from './opponent.js';
+import { Opponent, attribution, stampFor, typographic } from './opponent.js';
 import { Chooser, bookNote, strengthLabel, unbreakable, withoutYear } from './chooser.js';
+import { gameFromLink, isChessPosition } from './link.js';
 
 const STORE_GAME = 'fischerbot.game.v3';
 const SAVE_VERSION = 1;
@@ -86,6 +90,7 @@ const game = {
   view: null,           // ply being looked at in review; null = the game itself
   flipped: false,
   nudged: false,
+  provisional: false,   // opened from a link, and no move of the visitor's in it yet: not saved
 };
 
 let prefs = { sound: true, colour: 'white', levelId: null, seen: [] };
@@ -135,6 +140,7 @@ function loadPrefs() {
 
 function save() {
   writeStore(STORE_PREFS, prefs);
+  if (game.provisional) return;                    // a game from a link: whatever was saved stays as it is
   if (!game.active) {
     writeStore(STORE_GAME, null);
     return;
@@ -206,16 +212,19 @@ function setUp({ level, human, colourPref = human === WHITE ? 'white' : 'black',
   game.view = null;
   game.flipped = false;
   game.nudged = false;
+  game.provisional = false;
+  opponent.setYear(level.year);                    // a quotation later than this Fischer is stamped as such
   shownPly = -1;
   hideError();
   hideEndCard();
 }
 
-function beginGame(options, { abandoned = false } = {}) {
+function beginGame(options, { abandoned = false, provisional = false } = {}) {
   setUp(options);
+  game.provisional = provisional;
   const { level, human } = game;
   client.newGame();
-  commentator.newGame({ year: level.year });
+  commentator.newGame({ year: level.year, side: human === WHITE ? 'black' : 'white' });
   opponent.silence();
 
   const firstTime = !prefs.seen.includes(level.id);
@@ -223,8 +232,7 @@ function beginGame(options, { abandoned = false } = {}) {
   if (abandoned && !firstTime) line = commentator.say('new_game');
   if (line === null && firstTime) line = commentator.say(`level_${level.year}`);
   if (line === null) line = commentator.say(human === WHITE ? 'start_as_black' : 'start_as_white');
-  if (firstTime) prefs.seen.push(level.id);
-  prefs.levelId = level.id;
+  if (!provisional) rememberLevel();
 
   render({ animate: false });
   if (line !== null) speak(line, { urgent: true });
@@ -232,6 +240,12 @@ function beginGame(options, { abandoned = false } = {}) {
   if (game.outcome !== null) conclude();
   else if (game.position.turn !== human) askFischer({ opening: game.moves.length === 0 });
   else armIdle();
+}
+
+/** The Fischer of this game is the one played last, and has been met. */
+function rememberLevel() {
+  if (!prefs.seen.includes(game.level.id)) prefs.seen.push(game.level.id);
+  prefs.levelId = game.level.id;
 }
 
 function restoreGame() {
@@ -250,6 +264,7 @@ function restoreGame() {
       startFen: saved.startFen,
       moves: saved.moves.filter(uci => typeof uci === 'string'),
     });
+    if (!isChessPosition(game.start)) throw new Error('not a chess position');
   } catch {
     game.active = false;
     writeStore(STORE_GAME, null);
@@ -268,7 +283,11 @@ function restoreGame() {
   game.flipped = saved.flipped === true;
   game.nudged = saved.nudged === true;
   game.lastWord = isLine(saved.lastWord) ? saved.lastWord : null;
-  commentator.restore({ ...(saved.commentator !== null && typeof saved.commentator === 'object' ? saved.commentator : {}), year: level.year });
+  commentator.restore({
+    ...(saved.commentator !== null && typeof saved.commentator === 'object' ? saved.commentator : {}),
+    year: level.year,
+    side: game.human === WHITE ? 'black' : 'white',
+  });
   opponent.silence();
   if (isLine(saved.lastLine)) {
     game.lastLine = saved.lastLine;
@@ -281,20 +300,9 @@ function restoreGame() {
   return true;
 }
 
-/** ?fen= / ?moves= / ?level= / ?color= : a game from a given position, for tests and for the curious. */
+/** ?fen= / ?moves= / ?level= / ?color= : a game from a given position, for tests and for the curious (link.js). */
 function gameFromQuery() {
-  const params = new URLSearchParams(window.location.search);
-  if (!params.has('fen') && !params.has('moves') && !params.has('level')) return null;
-  const level = levelById(params.get('level')) ?? levelById(prefs.levelId) ?? LEVELS[LEVELS.length - 1];
-  const colour = (params.get('color') ?? params.get('colour') ?? 'white').toLowerCase();
-  const startFen = params.get('fen') ?? STARTING_FEN;
-  const moves = (params.get('moves') ?? '').split(/[\s,]+/).filter(Boolean);
-  try {
-    Position.fromMoves(moves, startFen);
-  } catch {
-    return null;
-  }
-  return { level, human: colour.startsWith('b') ? BLACK : WHITE, startFen, moves };
+  return gameFromLink(window.location.search, { levels: LEVELS, levelId: prefs.levelId });
 }
 
 function canMove() {
@@ -310,6 +318,11 @@ function humanMoved(move) {
   }
   const facts = moveFacts(game.position, move);
   pushMove(move, { facts });
+  if (game.provisional) {
+    // a game opened from a link is the visitor's own from their first move in it: now it is saved
+    game.provisional = false;
+    rememberLevel();
+  }
   window.clearTimeout(idleTimer);
   playMoveSound(facts);
   game.outcome = outcomeOf(game.position);
@@ -500,6 +513,7 @@ function takeBack() {
   const count = takeBackCount();
   if (count === 0) return;
   game.token += 1;                         // whatever he was thinking about no longer matters
+  client.forget();                         // ... and a question still waiting to be sent never is
   stopThinking();
   window.clearTimeout(endTimer);
   hideEndCard();
@@ -519,7 +533,10 @@ function takeBack() {
   const line = commentator.say('takeback', {}, { ply: game.moves.length });
   if (line !== null) speak(line, { urgent: true });
   else opponent.settle();
+  const fromButton = document.activeElement === els.btnBack;
   render();
+  // nothing left to take back: the button has gone grey under the keyboard, which goes to the board (not to <body>)
+  if (fromButton && els.btnBack.disabled) focusBoard();
   save();
   if (game.position.turn !== game.human) askFischer();
   else armIdle();
@@ -539,6 +556,11 @@ function armIdle() {
     if (line !== null) speak(line);
     save();
   }, IDLE_MS);
+}
+
+/** The keyboard is at the board. */
+function focusBoard() {
+  $('board').querySelector('[role="grid"]')?.focus({ preventScroll: true });
 }
 
 function playMoveSound(facts) {
@@ -594,6 +616,7 @@ function render({ animate = true } = {}) {
   renderEngine();
   renderTools();
   fitBar();
+  keepMoveInSight();          // again, now that everything round the sheet has its size
 }
 
 function renderBoard({ animate = true, force = false } = {}) {
@@ -757,23 +780,38 @@ function renderStrips() {
  * Your strip and the controls. In the stylesheet the row wraps, so the two can never be painted over one another;
  * this picks the lowest data-fit level (see .player-bar in style.css: the colour word goes first, then the labels
  * shorten or the tray tightens) at which nothing has had to wrap beyond the rows the layout promises (--bar-rows).
+ * It also says where "Back to the game" stands while you look back on a short phone (data-live: beside | row).
  */
 const BAR_FIT_MAX = 3;
 function fitBar() {
   const bar = els.playerBar;
   const strip = els.stripBottom;
-  const rows = Number.parseInt(window.getComputedStyle(bar).getPropertyValue('--bar-rows'), 10) || 1;
-  const beside = els.reviewDock.childElementCount > 0 ? els.reviewDock : rows === 1 ? els.tools : null;
-  const fits = () => {
+  const style = window.getComputedStyle(bar);
+  const rows = Number.parseInt(style.getPropertyValue('--bar-rows'), 10) || 1;
+  const beside = els.reviewDock.childElementCount > 0 ? [els.reviewDock] : rows === 1 ? [els.tools] : [];
+  // on a short phone "Back to the game" belongs on that row too, beside the arrows (--live-beside in style.css),
+  // so that the controls under it keep their place while you look back
+  const live = !els.revLive.hidden && els.revLive.parentElement === bar && style.getPropertyValue('--live-beside').trim() === '1';
+  const fits = others => {
     const box = strip.getBoundingClientRect();
     if (box.width > bar.clientWidth + 0.5) return false;
-    return beside === null || beside.getBoundingClientRect().top < box.bottom - 1;
+    return others.every(other => other.getBoundingClientRect().top < box.bottom - 1);
   };
-  let level = 0;
-  bar.dataset.fit = '0';
-  while (level < BAR_FIT_MAX && !fits()) {
-    level += 1;
-    bar.dataset.fit = String(level);
+  const choose = others => {
+    let level = 0;
+    bar.dataset.fit = '0';
+    while (level < BAR_FIT_MAX && !fits(others)) {
+      level += 1;
+      bar.dataset.fit = String(level);
+    }
+    return fits(others);
+  };
+  bar.dataset.live = 'beside';
+  if (!live) choose(beside);
+  else if (!choose([...beside, els.revLive])) {
+    // no room for it there whatever the strip gives up (a tray full of captured pieces): it takes a row of its own
+    bar.dataset.live = 'row';
+    choose(beside);
   }
 }
 
@@ -848,24 +886,35 @@ function renderSheet() {
   els.sheet.replaceChildren(...rows);
   if (hadFocus) (currentButton ?? els.sheet.querySelector('button.ply'))?.focus({ preventScroll: true });
 
-  // keep the move being looked at in sight, without ever scrolling the page itself
-  const list = els.sheet;
-  if (currentButton !== null) {
-    const line = currentButton.parentElement;
-    const top = line.offsetTop - list.offsetTop;
-    if (top < list.scrollTop) list.scrollTop = top;
-    else if (top + line.offsetHeight * 2 > list.scrollTop + list.clientHeight) {
-      list.scrollTop = top + line.offsetHeight * 2 - list.clientHeight;
-    }
-  } else {
-    list.scrollTop = 0;
-  }
+  keepMoveInSight();
 
   const total = game.moves.length;
   els.revFirst.disabled = els.revPrev.disabled = !game.active || current === 0;
   els.revNext.disabled = els.revLast.disabled = !game.active || current === total;
   els.revLive.hidden = game.view === null;
   els.btnPgn.disabled = !game.active || total === 0;
+}
+
+/**
+ * Keeps the move being looked at in sight (with the line under it, where the result is written), without ever
+ * scrolling the page itself. The sheet is as tall as its column leaves it, and that changes after the moves are
+ * written - the caption above it is filled in, the fonts arrive, the window is resized - so this is called again
+ * whenever the sheet changes size (wire), not only when its contents do.
+ */
+function keepMoveInSight() {
+  const list = els.sheet;
+  const current = list.querySelector('.ply[aria-current="true"]');
+  if (current === null) {
+    list.scrollTop = 0;
+    return;
+  }
+  const line = current.parentElement;
+  const height = line.offsetHeight;
+  const top = line.getBoundingClientRect().top - list.getBoundingClientRect().top - list.clientTop + list.scrollTop;
+  const room = list.clientHeight;
+  if (room <= 0) return;                                             // not laid out (yet)
+  if (top < list.scrollTop) list.scrollTop = top;
+  else if (top + Math.min(height * 2, room) > list.scrollTop + room) list.scrollTop = top + Math.min(height * 2, room) - room;
 }
 
 /** His latest move at or before the position on the board, with what he reported about it. */
@@ -984,8 +1033,12 @@ function openChooser() {
 function closeChooser() {
   if (!chooser.isOpen) return;
   prefs.colour = chooser.colour;
+  // the page comes back to life first: while it is inert nothing in it accepts the focus the chooser hands back
+  els.page.inert = !els.endcard.hidden;
   chooser.close();
   syncInert();
+  // opened from something that is no longer there (a button of the game-over card): the way back in gets the focus
+  if (!els.page.contains(document.activeElement)) els.btnNew.focus({ preventScroll: true });
   render();
   save();
   armIdle();
@@ -996,12 +1049,12 @@ function chosen({ levelId, colour, byKeyboard = false }) {
   if (level === null) return;
   const abandoned = game.active && game.outcome === null && game.moves.length > 0;
   prefs.colour = colour;
-  chooser.close();
+  chooser.close({ refocus: false });               // a game begins: the keyboard, if it chose, goes to the board (below)
   syncInert();
   const human = colour === 'black' ? BLACK : colour === 'white' ? WHITE : (Math.random() < 0.5 ? WHITE : BLACK);
   beginGame({ level, human, colourPref: colour }, { abandoned });
   // chosen from the keyboard: the game has begun, so the keyboard is at the board (not back on <body>)
-  if (byKeyboard) $('board').querySelector('[role="grid"]')?.focus({ preventScroll: true });
+  if (byKeyboard) focusBoard();
 }
 
 function showEndCard() {
@@ -1019,7 +1072,10 @@ function showEndCard() {
     const isQuote = word.quote !== null && typeof word.quote === 'object';
     els.endWord.dataset.kind = isQuote ? 'quote' : 'line';
     els.endWordText.textContent = isQuote ? `“${word.text}”` : typographic(word.text);
-    els.endWordSource.textContent = isQuote ? `${attribution(word.quote)} · his own words` : 'FischerBot, not Fischer';
+    // the same stamp as in the bubble: "his own words", or "as he later wrote" for words later than this Fischer
+    els.endWordSource.textContent = isQuote
+      ? `${attribution(word.quote)} · ${stampFor(word.quote, game.level.year).tag.toLowerCase()}`
+      : 'FischerBot, not Fischer';
   }
   els.endcard.hidden = false;
   syncInert();
@@ -1166,7 +1222,7 @@ function wire() {
   });
   els.btnRetry.addEventListener('click', () => {
     if (!game.active || game.outcome !== null || game.position.turn === game.human) return;
-    $('board').querySelector('[role="grid"]')?.focus({ preventScroll: true });   // the button is about to go
+    focusBoard();                                    // the button is about to go
     askFischer();
   });
 
@@ -1180,8 +1236,14 @@ function wire() {
     else els.sheetFoot.prepend(els.revLive);
     fitBar();
   };
-  if (typeof ResizeObserver === 'function') new ResizeObserver(fitBar).observe(els.playerBar);
-  document.fonts?.ready.then(fitBar);
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(fitBar).observe(els.playerBar);
+    new ResizeObserver(keepMoveInSight).observe(els.sheet);
+  }
+  document.fonts?.ready.then(() => {
+    fitBar();
+    keepMoveInSight();
+  });
   narrow.addEventListener('change', dockReview);
   dockReview();
 
@@ -1255,7 +1317,7 @@ async function boot() {
   }
 
   const fromQuery = gameFromQuery();
-  if (fromQuery !== null) beginGame(fromQuery);
+  if (fromQuery !== null) beginGame(fromQuery, { provisional: true });
   else if (!restoreGame()) openChooser();
   document.body.dataset.ready = 'true';
 }
