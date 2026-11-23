@@ -319,9 +319,13 @@ function humanMoved(move) {
   const facts = moveFacts(game.position, move);
   pushMove(move, { facts });
   if (game.provisional) {
-    // a game opened from a link is the visitor's own from their first move in it: now it is saved
+    // a game opened from a link is the visitor's own from their first move in it: now it is saved -
+    // and the address stops being the link, so that a reload brings back their game, not the link's position
     game.provisional = false;
     rememberLevel();
+    if (window.location.search !== '') {
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.hash); } catch { /* a sandboxed frame */ }
+    }
   }
   window.clearTimeout(idleTimer);
   playMoveSound(facts);
@@ -401,6 +405,13 @@ function fischerFailed(error) {
   els.error.title = detail;
   els.error.hidden = false;
   render();
+  // a position set up by a link, and no engine for it here (the worker did not answer; the server plays only
+  // from the usual start): the game cannot go on, so it is not kept - or this card would be all that the
+  // next visit showed. (Should he answer after all, it is the visitor's again from their next move.)
+  if (kind === 'position') {
+    game.provisional = true;
+    writeStore(STORE_GAME, null);
+  }
   // the message sits on the board, where the eye is; the way out gets the focus
   if (!chooser.isOpen) els.btnRetry.focus({ preventScroll: true });
 }
@@ -1088,6 +1099,14 @@ function hideEndCard() {
   syncInert();
 }
 
+/** "Look at the board", Escape, a click beside the card: it goes, and the keyboard is at the board (not on <body>). */
+function closeEndCard() {
+  if (!els.endcard || els.endcard.hidden) return;
+  const hadFocus = els.endcard.contains(document.activeElement);
+  hideEndCard();
+  if (hadFocus) focusBoard();
+}
+
 function playAgain() {
   const colour = game.colourPref;
   const human = colour === 'black' ? BLACK : colour === 'white' ? WHITE : (Math.random() < 0.5 ? WHITE : BLACK);
@@ -1163,7 +1182,7 @@ function onKey(event) {
   if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'Escape') {
     if (chooser.isOpen) closeChooser();
-    else if (!els.endcard.hidden) hideEndCard();
+    else if (!els.endcard.hidden) closeEndCard();
     else if (game.view !== null) review(game.moves.length);
     else return;
     event.preventDefault();
@@ -1273,9 +1292,9 @@ function wire() {
   els.endAgain.addEventListener('click', playAgain);
   els.endNew.addEventListener('click', openChooser);
   els.endPgn.addEventListener('click', () => copyPgn(els.endPgn));
-  els.endClose.addEventListener('click', hideEndCard);
+  els.endClose.addEventListener('click', closeEndCard);
   els.endcard.addEventListener('pointerdown', event => {
-    if (event.target === els.endcard) hideEndCard();
+    if (event.target === els.endcard) closeEndCard();
   });
 
   document.addEventListener('keydown', onKey);

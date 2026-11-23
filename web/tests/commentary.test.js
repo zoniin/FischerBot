@@ -517,3 +517,29 @@ test('a line marked "as" is said only when he has those pieces', () => {
   reloaded.restore(playing('white').snapshot());
   assert.equal(quotations(drain(reloaded)), 0);
 });
+
+test('the boy of 1956 does not talk about poisoned pawns, his boyhood or his whole career', () => {
+  const data = staticData('commentary.json');
+  const later = {
+    opening_sicilian_najdorf: [/poisoned pawn/, /since I was a boy/],
+    opening_kings_indian: [/my whole career/],
+    endgame_reached: [/since I was a boy/],
+  };
+  for (const year of [1956, 1958]) {
+    for (const [category, patterns] of Object.entries(later)) {
+      const fischer = new Commentator(data, { random: () => 0 });
+      fischer.newGame({ year });
+      let said = 0;
+      for (let i = 0, ply = 0; i < data.categories[category].length + 2; i += 1) {
+        const line = fischer.say(category, {}, { ply: ply += 100 });
+        if (line === null) continue;
+        said += 1;
+        for (const pattern of patterns) assert.doesNotMatch(line.text, pattern, `${year}, ${category}`);
+      }
+      assert.ok(said >= 4, `${year}, ${category}: he still has something to say (${said})`);
+    }
+  }
+  // the first of his poisoned-pawn games was in 1961
+  const najdorf = data.categories.opening_sicilian_najdorf.find(line => /poisoned pawn/.test(line.text));
+  assert.equal(najdorf.since, 1961);
+});

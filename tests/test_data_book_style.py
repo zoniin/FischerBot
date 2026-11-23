@@ -961,6 +961,22 @@ class TestApi:
         missing = client.get("/static/img/nothing.png")
         assert missing.status_code == 404 and not missing.cache_control.max_age
 
+    def test_an_image_that_is_confirmed_unchanged_keeps_its_day(self, client):
+        """A browser replaces the headers it stored with those of a "not modified" reply."""
+        for url in ("/static/img/fischer-wide.webp", "/static/fonts/playfair-display-latin-700-normal.woff2"):
+            first = client.get(url)
+            etag = first.headers["ETag"]
+            first.close()
+            again = client.get(url, headers={"If-None-Match": etag})
+            assert again.status_code == 304, url
+            assert again.cache_control.max_age == 24 * 60 * 60 and again.cache_control.public, url
+            assert not again.cache_control.no_cache, url
+        code = client.get("/static/js/app.js")
+        etag = code.headers["ETag"]
+        code.close()
+        again = client.get("/static/js/app.js", headers={"If-None-Match": etag})
+        assert again.status_code == 304 and again.cache_control.no_cache
+
     def test_security_headers_present(self, client):
         r = client.get("/api/health")
         assert "Content-Security-Policy" in r.headers

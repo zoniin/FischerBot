@@ -361,3 +361,31 @@ test('the page ends a game on the same positions as the server, and on no others
   assert.equal(outcomeOf(Position.fromMoves(shuffle)), null);
   assert.equal(outcomeOf(Position.fromMoves([...shuffle, 'f6g8'])).kind, 'repetition');
 });
+
+test('"That loses" is said only when it is true: not while he is the one who stands worse', () => {
+  const at = (before, after) => eventsForBotMove({
+    result: { uci: 'a2a3', san: 'a3', source: 'search', evalCp: after, pv: [], context: null },
+    memory: { ...newMemory(), lastEval: before, lastPv: ['e2e4', 'e7e5'], tides: ['bot_better', 'bot_winning', 'bot_worse', 'bot_losing'] },
+    botMove: quiet, playerMove: quiet, playerUci: 'a7a6', gameVariables });
+
+  // nine pawns down, then four and a half: a blunder on the scoresheet, and nothing for him to crow about
+  let step = at(-900, -450);
+  assert.equal(step.verdict, 'blunder', 'the move is still marked ??');
+  assert.ok(!categories(step.events).includes('player_blunder'));
+  assert.ok(!categories(step.events).includes('player_mistake'));
+
+  // a won game thrown back to level, or to his advantage: now it is true
+  step = at(-900, 0);
+  assert.equal(step.verdict, 'blunder');
+  assert.equal(step.events[0].category, 'player_blunder');
+  step = at(-200, 250);
+  assert.equal(step.events[0].category, 'player_blunder');
+
+  // the same for a mistake: "Now I'm better" must be true as well
+  step = at(-300, -180);
+  assert.equal(step.verdict, 'mistake');
+  assert.ok(!categories(step.events).includes('player_mistake'));
+  step = at(-60, 60);
+  assert.equal(step.verdict, 'mistake');
+  assert.equal(step.events[0].category, 'player_mistake');
+});

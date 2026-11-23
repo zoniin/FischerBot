@@ -179,7 +179,11 @@ export function eventsForBotMove({
     add('getting_mated', 'always');
   }
 
-  if (verdict === 'blunder') add('player_blunder', 'always');
+  // "That loses." has to be true. A move that gives back part of a won game is still a blunder on the
+  // scoresheet, but while he is the one who stands worse he has nothing to crow about: he says it only
+  // when the move has left him at least level.
+  const turned = score !== null && score >= 0;
+  if (verdict === 'blunder' && turned) add('player_blunder', 'always');
 
   // his own games
   const bookVars = gameVariables(game);
@@ -234,7 +238,7 @@ export function eventsForBotMove({
   if (botMove.queenTrade) add('bot_queen_trade', 'often');
   if (playerMove?.queenTrade) add('player_queen_trade', 'often');
 
-  if (verdict === 'mistake') add('player_mistake', 'often');
+  if (verdict === 'mistake' && turned) add('player_mistake', 'often');
   if (verdict === 'inaccuracy') add('player_inaccuracy', 'sometimes');
   if (verdict === 'good') add('player_good_move', 'sometimes');
 

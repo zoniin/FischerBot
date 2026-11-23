@@ -503,7 +503,8 @@
     "mood": "pleased"
    },
    {
-    "text": "Najdorf Sicilian. I've lived in these positions since I was a boy."
+    "text": "Najdorf Sicilian. I've lived in these positions since I was a boy.",
+    "since": 1963
    },
    {
     "text": "The Najdorf. Sharp and sound. That's why I play it."
@@ -516,7 +517,8 @@
     "text": "The Najdorf. One loose move here and it's over."
    },
    {
-    "text": "A Najdorf. I've taken a poisoned pawn or two in this opening."
+    "text": "A Najdorf. I've taken a poisoned pawn or two in this opening.",
+    "since": 1961
    },
    {
     "text": "The Najdorf. Nobody gets a quiet game out of it."
@@ -582,7 +584,8 @@
     "text": "King's Indian. My bishop on g7 will have its say."
    },
    {
-    "text": "The King's Indian. I've trusted it my whole career."
+    "text": "The King's Indian. I've trusted it my whole career.",
+    "since": 1963
    },
    {
     "text": "King's Indian. White gets the space and I get the chances."
@@ -1885,7 +1888,8 @@
     "text": "Queens are off. Now the king comes out."
    },
    {
-    "text": "I've studied endgames since I was a boy. Let's go."
+    "text": "I've studied endgames since I was a boy. Let's go.",
+    "since": 1963
    },
    {
     "text": "The endgame. No more hiding."

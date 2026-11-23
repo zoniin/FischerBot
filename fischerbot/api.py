@@ -158,7 +158,9 @@ def create_app() -> Flask:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if request.path.startswith(KEPT_PATHS) and response.status_code == 200:
+        # (also on "not modified" and on a part of the file: a browser replaces
+        # the headers it has stored with those of the reply that confirms them)
+        if request.path.startswith(KEPT_PATHS) and response.status_code in (200, 206, 304):
             response.cache_control.no_cache = None
             response.cache_control.public = True
             response.cache_control.max_age = KEPT_MAX_AGE_S
