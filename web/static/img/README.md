@@ -8,8 +8,8 @@ for the opponent chooser and the game-over card) and `fischer-192.png` (the
 page icon) all come from one picture.
 
 **Where it is from.** It is the portrait the owner of this project asked for:
-an avatar of Fischer he saw in a TikTok post — a mock chess-site screen in
-which the portrait says "Stockfish will not save you". Who made the portrait,
+an avatar of Fischer from a TikTok post — a mock chess-site screen in which
+the portrait says "Stockfish will not save you". Who made the portrait,
 and under what terms, is not known to us; it is used here at the owner's
 decision. If it is your work and you would like to be credited, or would like
 it removed, please open an issue on this repository.

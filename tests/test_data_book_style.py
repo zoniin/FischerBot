@@ -721,6 +721,52 @@ class TestApi:
         r = client.post("/api/move", json={"history": ["e2e4"] * 2000, "difficulty": "easy"})
         assert r.status_code == 400
 
+    def test_bodies_that_are_not_a_request_are_refused_politely(self, client):
+        """Anything may be posted to a public address: none of it is the server's fault (a 500)."""
+        for body in ('"x"', "5", "true", "null", "[]", "[" * 5000, '{"history": [], "level": ["world"]}',
+                     '{"history": [], "level": {"a": 1}}', '{"history": [], "difficulty": ["easy"]}',
+                     '{"history": [], "difficulty": 3}', "{not json", ""):
+            r = client.post("/api/move", data=body, content_type="application/json")
+            assert r.status_code == 400, f"{body[:40]!r} gave {r.status_code}"
+            assert "error" in r.get_json()
+
+    def test_a_huge_body_is_refused_unread(self, client):
+        r = client.post("/api/move", data='{"history": [], "pad": "' + "x" * 200_000 + '"}',
+                        content_type="application/json")
+        assert r.status_code == 413
+        assert r.get_json() == {"error": "Request too large"}
+        longest = ["e2e4q"] * 1024      # the longest history accepted, at its widest
+        r = client.post("/api/move", json={"history": longest, "level": "world"})
+        assert r.status_code == 400 and "Illegal move" in r.get_json()["error"], "read, then judged on its moves"
+
+    def test_the_pages_files_are_served_under_the_types_a_browser_requires(self):
+        """ES modules, and "nosniff" on every reply: a script served as text/plain is a blank page.
+        The operating system's opinion of .js (the Windows registry often says text/plain) must not matter."""
+        import mimetypes
+        from fischerbot.api import create_app
+        mimetypes.add_type("text/plain", ".js")       # what a Windows machine may report
+        try:
+            app = create_app()
+            app.testing = True
+            c = app.test_client()
+            expected = {
+                "/static/js/app.js": "text/javascript",
+                "/static/js/worker.js": "text/javascript",
+                "/static/css/style.css": "text/css",
+                "/static/data/style.json": "application/json",
+                "/static/img/fischer.webp": "image/webp",
+                "/static/img/fischer-192.png": "image/png",
+                "/static/img/pieces/wK.svg": "image/svg+xml",
+            }
+            for url, content_type in expected.items():
+                r = c.get(url)
+                assert r.status_code == 200, url
+                assert r.headers["Content-Type"].split(";")[0] == content_type, url
+                assert r.headers["X-Content-Type-Options"] == "nosniff"
+                r.close()
+        finally:
+            mimetypes.add_type("text/javascript", ".js")
+
     def test_security_headers_present(self, client):
         r = client.get("/api/health")
         assert "Content-Security-Policy" in r.headers

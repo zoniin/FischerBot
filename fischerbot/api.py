@@ -5,6 +5,7 @@ request; the server replays it onto a fresh board. This works identically
 on a laptop and on serverless hosting (no in-memory session store to lose).
 """
 
+import mimetypes
 import threading
 from pathlib import Path
 
@@ -38,6 +39,21 @@ LEVELS = {
 _SETTINGS = {**DIFFICULTIES, **LEVELS}
 
 MAX_HISTORY = 1024  # longest legal chess games are far below this
+MAX_BODY_BYTES = 64 * 1024  # a history of MAX_HISTORY moves is under 10 kB of JSON
+
+# The page is made of ES modules, and every reply says "nosniff": a browser
+# refuses a script or a stylesheet served under the wrong type. Python asks
+# the operating system for these types where it can - the Windows registry
+# often has .js as text/plain, and Pythons before 3.11 do not know .webp - so
+# the types of the files the page loads are stated here.
+STATIC_TYPES = {
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
 
 _bots = {}
 _bots_guard = threading.Lock()
@@ -88,11 +104,15 @@ def _status(board: chess.Board) -> str:
 
 
 def create_app() -> Flask:
+    for extension, content_type in STATIC_TYPES.items():
+        mimetypes.add_type(content_type, extension)
+
     app = Flask(
         __name__,
         static_folder=str(WEB_DIR / "static"),
         static_url_path="/static",
     )
+    app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
 
     @app.get("/")
     def index():
@@ -124,19 +144,24 @@ def create_app() -> Flask:
 
     @app.post("/api/move")
     def move():
-        data = request.get_json(silent=True) or {}
+        try:
+            data = request.get_json(silent=True)
+        except RecursionError:  # brackets nested thousands deep
+            data = None
+        if not isinstance(data, dict):
+            data = {}
         history = data.get("history")
         if not isinstance(history, list):
             return jsonify({"error": "Body must include 'history': list of UCI moves"}), 400
         level = data.get("level")
         if level is not None:
-            if level not in LEVELS:
-                return jsonify({"error": f"Unknown level {level!r}"}), 400
+            if not isinstance(level, str) or level not in LEVELS:
+                return jsonify({"error": "Unknown level"}), 400
             setting = level
         else:
             setting = data.get("difficulty", "medium")
-            if setting not in DIFFICULTIES:
-                return jsonify({"error": f"Unknown difficulty {setting!r}"}), 400
+            if not isinstance(setting, str) or setting not in DIFFICULTIES:
+                return jsonify({"error": "Unknown difficulty"}), 400
 
         try:
             board = _replay(history)
@@ -184,6 +209,10 @@ def create_app() -> Flask:
     @app.errorhandler(404)
     def not_found(_e):
         return jsonify({"error": "Not found"}), 404
+
+    @app.errorhandler(413)
+    def too_large(_e):
+        return jsonify({"error": "Request too large"}), 413
 
     @app.errorhandler(500)
     def internal(_e):
