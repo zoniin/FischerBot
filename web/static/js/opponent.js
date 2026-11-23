@@ -53,6 +53,24 @@ export function typographic(text) {
   return String(text).replace(/(\p{L})'(\p{L})/gu, '$1’$2').replace(/(\p{L})'(?=\s|$|[.,;:!?])/gu, '$1’');
 }
 
+/**
+ * A line typeset as a quotation: set in double marks, and any double marks of its own become single ones
+ * (“The rest is ‘a matter of technique.’”). A line that arrives already wrapped in one pair is not wrapped twice.
+ */
+export function quoted(text) {
+  let words = String(text ?? '').trim();
+  const wrapped = /^[“"][^“”"]*[”"]$/.test(words);
+  if (wrapped) words = words.slice(1, -1);
+  let open = false;
+  const inner = words.replace(/[“”"]/g, mark => {
+    if (mark === '“') open = true;
+    else if (mark === '”') open = false;
+    else open = !open;
+    return open ? '‘' : '’';
+  });
+  return `“${inner}”`;
+}
+
 export class Opponent {
   #card;
   #bubble;
@@ -174,6 +192,7 @@ export class Opponent {
     this.#holdUntil = 0;
     this.#bubble.dataset.state = 'empty';
     this.#card.dataset.speaking = 'false';
+    this.#card.dataset.crowded = 'false';
     this.#said.textContent = '';
   }
 
@@ -181,7 +200,7 @@ export class Opponent {
     this.#stopTyping();
     window.clearTimeout(this.#restTimer);
     const isQuote = line.quote !== null && typeof line.quote === 'object';
-    const shown = isQuote ? `“${line.text}”` : typographic(line.text);
+    const shown = isQuote ? quoted(line.text) : typographic(line.text);
 
     this.#current = line;
     this.#transient = transient;
@@ -198,9 +217,18 @@ export class Opponent {
     }
 
     if (isQuote) {
-      const nodes = ['— Bobby Fischer'];
+      // "— Bobby Fischer, " then the source; where the bubble has had to be set smaller the name steps aside
+      // (style.css: .bubble-by) so that the source keeps to one line - the stamp above already says whose words they are
       const parts = sourceParts(line.quote.source);
-      if (parts.length > 0) nodes.push(', ');
+      const nodes = ['— '];
+      if (parts.length > 0) {
+        const by = document.createElement('span');
+        by.className = 'bubble-by';
+        by.textContent = 'Bobby Fischer, ';
+        nodes.push(by);
+      } else {
+        nodes.push('Bobby Fischer');
+      }
       for (const part of parts) {
         if (part.italic) {
           const cite = document.createElement('cite');
@@ -275,15 +303,36 @@ export class Opponent {
 
   /** The bubble has a reserved place; a line that would not fit it is set smaller, a size at a time. */
   #fit() {
-    const room = this.#bubble.parentElement?.clientHeight ?? 0;
+    const place = this.#bubble.parentElement;
+    const room = place?.clientHeight ?? 0;
     const box = this.#text.parentElement;
+    this.#card.dataset.crowded = 'false';
     if (room <= 0 || box === null || this.#bubble.dataset.kind === 'dots') return;
+    // each size is measured the moment it is set: nothing in the bubble may be in transition meanwhile
+    // (under reduced motion a blanket rule gives every element one, and the loop used to read stale heights)
+    this.#bubble.dataset.fitting = 'true';
     let tight = 0;
     this.#bubble.dataset.tight = '0';
     while (tight < TIGHTEST && box.offsetHeight > room) {
       tight += 1;
       this.#bubble.dataset.tight = String(tight);
     }
+    // still too tall at the smallest size: the line that says who he is gives the bubble its room
+    // (style.css: data-crowded), and the size is chosen again for the taller place
+    const id = place.nextElementSibling;
+    if (box.offsetHeight > room && id !== null) {
+      const more = Math.max(0, Math.round(id.getBoundingClientRect().bottom - place.getBoundingClientRect().bottom));
+      this.#card.style.setProperty('--crowd', `${more}px`);
+      this.#card.dataset.crowded = 'true';
+      tight = 0;
+      this.#bubble.dataset.tight = '0';
+      while (tight < TIGHTEST && box.offsetHeight > room + more) {
+        tight += 1;
+        this.#bubble.dataset.tight = String(tight);
+      }
+    }
+    void box.offsetHeight;
+    delete this.#bubble.dataset.fitting;
   }
 
   #open() {

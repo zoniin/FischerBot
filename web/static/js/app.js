@@ -12,7 +12,7 @@
 // a game from that position (with ?level=<id> and ?color=white|black), and
 // <body> carries data-phase / data-ply / data-engine for tests to wait on.
 
-import { Position, Move, STARTING_FEN, WHITE, BLACK } from './rules.js';
+import { Position, Move, STARTING_FEN, WHITE, BLACK, PAWN } from './rules.js';
 import { LEVELS } from './bot.js';
 import { Board } from './board.js';
 import { Commentator, gameVariables } from './commentary.js';
@@ -593,6 +593,7 @@ function render({ animate = true } = {}) {
   renderCite();
   renderEngine();
   renderTools();
+  fitBar();
 }
 
 function renderBoard({ animate = true, force = false } = {}) {
@@ -644,7 +645,14 @@ function renderOpponent() {
   els.oppYear.textContent = String(level.year);
   // the year and how strong he is - the last only if the level says (never invented here);
   // where he was that year is on his card in the chooser, and in the tooltip
-  els.oppMeta.textContent = [String(level.year), strengthLabel(level)].filter(Boolean).join(' · ');
+  // two pieces that are never broken or cut: where there is no room for both the year gives way (style.css)
+  const strength = strengthLabel(level);
+  const year = document.createElement('span');
+  year.textContent = strength ? `${level.year} · ` : String(level.year);
+  if (strength) year.className = 'opp-meta-year';
+  const how = document.createElement('span');
+  how.textContent = strength ?? '';
+  els.oppMeta.replaceChildren(year, how);
   els.oppMeta.title = withoutYear(level.subtitle);
   renderMate();
 }
@@ -698,7 +706,9 @@ function takenNodes(color, position) {
       const img = document.createElement('img');
       img.src = pieceUrl(`${color === WHITE ? 'b' : 'w'}${PIECE_LETTERS[type]}`);
       img.alt = '';
+      // pieces of one kind overlap (pawns most closely); a wider step where the kind changes
       if (previous !== 0 && previous !== type) img.className = 'gap';
+      else if (type === PAWN) img.className = 'pawn';
       previous = type;
       caps.append(img);
     }
@@ -741,6 +751,30 @@ function renderStrips() {
     nodes.push(side);
   }
   el.replaceChildren(...nodes, ...takenNodes(you, position));
+}
+
+/**
+ * Your strip and the controls. In the stylesheet the row wraps, so the two can never be painted over one another;
+ * this picks the lowest data-fit level (see .player-bar in style.css: the colour word goes first, then the labels
+ * shorten or the tray tightens) at which nothing has had to wrap beyond the rows the layout promises (--bar-rows).
+ */
+const BAR_FIT_MAX = 3;
+function fitBar() {
+  const bar = els.playerBar;
+  const strip = els.stripBottom;
+  const rows = Number.parseInt(window.getComputedStyle(bar).getPropertyValue('--bar-rows'), 10) || 1;
+  const beside = els.reviewDock.childElementCount > 0 ? els.reviewDock : rows === 1 ? els.tools : null;
+  const fits = () => {
+    const box = strip.getBoundingClientRect();
+    if (box.width > bar.clientWidth + 0.5) return false;
+    return beside === null || beside.getBoundingClientRect().top < box.bottom - 1;
+  };
+  let level = 0;
+  bar.dataset.fit = '0';
+  while (level < BAR_FIT_MAX && !fits()) {
+    level += 1;
+    bar.dataset.fit = String(level);
+  }
 }
 
 function renderSheet() {
@@ -849,6 +883,7 @@ function renderCite() {
   let label = 'His games';
   let text = game.active ? 'Nothing of his on the board yet.' : 'The book is made of his own games.';
   let note = game.level ? `Book: ${bookNote(game.level).toLowerCase()}` : NBSP;
+  let noteMove = null;          // a move in the note keeps its own case: the note is set in capitals, "1. e4" is not
   if (found !== null) {
     const { record, index } = found;
     if (record.source === 'book' && record.cite) {
@@ -868,7 +903,8 @@ function renderCite() {
         kind = 'left';
         label = 'Out of the book';
         text = 'From here he finds the moves himself.';
-        note = `Last move from his games: ${moveLabel(lastBook)}`;
+        note = 'Last move from his games: ';
+        noteMove = moveLabel(lastBook);
       } else {
         label = 'His games';
         text = 'None of his games went this way.';
@@ -880,6 +916,12 @@ function renderCite() {
   els.citeLabel.textContent = label;
   els.citeGame.textContent = text;
   els.citeNote.textContent = note;
+  if (noteMove !== null) {
+    const san = document.createElement('span');
+    san.className = 'cite-move';
+    san.textContent = noteMove;
+    els.citeNote.append(san);
+  }
 }
 
 function evalText(cp) {
@@ -1094,7 +1136,7 @@ function wire() {
     oppYear: $('opp-year'), oppTaken: $('opp-taken'), boardFrame: $('board-frame'),
     review: $('review'), reviewSteps: $('review-steps'), reviewDock: $('review-dock'),
     cite: $('cite'), citeLabel: $('cite-label'), citeGame: $('cite-game'), citeNote: $('cite-note'),
-    stripBottom: $('strip-bottom'),
+    stripBottom: $('strip-bottom'), playerBar: $('player-bar'), tools: $('tools'), sheetFoot: $('sheet-foot'),
     btnNew: $('btn-new'), btnBack: $('btn-back'), btnFlip: $('btn-flip'), btnSound: $('btn-sound'),
     error: $('error'), errorText: $('error-text'), btnRetry: $('btn-retry'),
     sheet: $('scoresheet'), sheetWhite: $('sheet-white'), sheetBlack: $('sheet-black'),
@@ -1131,7 +1173,15 @@ function wire() {
   // one column (and a phone on its side): the scoresheet is under the board, out of sight, so the
   // arrows that step through the game sit directly under the board instead of under the sheet
   const narrow = window.matchMedia('(max-width: 999px)');
-  const dockReview = () => (narrow.matches ? els.reviewDock : els.review).prepend(els.reviewSteps);
+  // ... and "Back to the game" goes with them
+  const dockReview = () => {
+    (narrow.matches ? els.reviewDock : els.review).prepend(els.reviewSteps);
+    if (narrow.matches) els.playerBar.insertBefore(els.revLive, els.tools);
+    else els.sheetFoot.prepend(els.revLive);
+    fitBar();
+  };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(fitBar).observe(els.playerBar);
+  document.fonts?.ready.then(fitBar);
   narrow.addEventListener('change', dockReview);
   dockReview();
 

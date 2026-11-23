@@ -94,7 +94,7 @@
   position: absolute;
   font-family: var(--cb-font);
   font-weight: 700;
-  font-size: clamp(8px, calc(var(--cb-sq-px) * 0.17), 14px);
+  font-size: clamp(9.5px, calc(var(--cb-sq-px) * 0.17), 14px);
   line-height: 1;
   opacity: 0.9;
   pointer-events: none;

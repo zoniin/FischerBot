@@ -391,6 +391,7 @@ button { font: inherit; color: inherit; }
 }
 
 .opp-side {
+  container: oppside / inline-size;
   align-self: stretch;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
@@ -439,10 +440,13 @@ button { font: inherit; color: inherit; }
   letter-spacing: 0.12em;
   text-transform: uppercase;
   line-height: 1.5;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--ink-faint);
+}
+
+/* the year and how strong he is: never cut off - where there is no room for both the year goes (it is on the portrait) */
+.opp-meta span { white-space: nowrap; }
+@container oppside (max-width: 214px) {
+  .opp-meta-year { display: none; }
 }
 
 /* the rule he stands on: the state of the game, what he has taken, and "M9" */
@@ -458,6 +462,7 @@ button { font: inherit; color: inherit; }
 
 .opp-status {
   flex: 0 1 auto;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -498,13 +503,11 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 /* what he has taken: pushed to the right, and the first thing to give way when the row is full */
 .opp-taken {
-  flex: 1 100 auto;
+  flex: 1 0 auto;
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  overflow: hidden;
 }
 
 /* "M9": he has announced mate in nine - a caption at the end of the row, never on top of anything */
@@ -581,6 +584,11 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .bubble-text .untyped { color: transparent; }
 
+/* the size of the text is measured the moment it is set (Opponent.#fit): it must never be in transition,
+   whatever a blanket rule (reduced motion gives every element a 0.01 ms transition) says */
+.bubble-text, .bubble-text * { transition: none !important; }
+.bubble[data-fitting], .bubble[data-fitting] *, .bubble[data-fitting] *::before { transition: none !important; }
+
 .bubble-source,
 .bubble-tag { display: none; }
 
@@ -593,6 +601,11 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 .bubble:is([data-tight="2"], [data-tight="3"], [data-tight="4"]) .bubble-source { margin-top: 4px; padding-top: 3px; font-size: 0.68rem; }
 .bubble[data-tight="4"] .bubble-source { font-size: 0.64rem; line-height: 1.25; }
 .bubble[data-kind="quote"]:is([data-tight="3"], [data-tight="4"]) .bubble-box { padding-top: 10px; }
+
+/* A line too tall for its place even at the smallest size (the longest quotations on a short phone) is given his
+   whole column: the bubble comes down over the line that says who he is, which steps aside until the next line. */
+.opp[data-crowded="true"] .opp-id { visibility: hidden; }
+.opp[data-crowded="true"] .bubble { bottom: calc(-1 * var(--crowd, 0px)); }
 
 /* nothing said yet */
 .bubble[data-state="empty"] .bubble-box { opacity: 0; transform: scale(0.9); }
@@ -643,6 +656,8 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 .bubble[data-kind="quote"][data-typed="true"] .bubble-source { opacity: 1; }
 .bubble[data-kind="quote"][data-state="rest"] .bubble-source { color: #564830; }
 .bubble-source cite { font-style: italic; }
+/* a quotation that has had to be set smaller keeps its source to one line: the name gives way (the stamp says whose words) */
+.bubble:is([data-tight="1"], [data-tight="2"], [data-tight="3"], [data-tight="4"]) .bubble-by { display: none; }
 
 .bubble[data-kind="quote"] .bubble-tag {
   display: block;
@@ -724,6 +739,8 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   line-height: 1.4;
   color: var(--ink-faint);
 }
+/* a move named in the note is written as a move: "1. e4", not "1. E4" */
+.cite-note .cite-move { text-transform: none; letter-spacing: 0.04em; white-space: nowrap; }
 
 /* one accent only: the rule and the kicker turn gold, the name of the game stays ink */
 .cite[data-kind="book"] { border-left-color: var(--gold); }
@@ -874,14 +891,18 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 .strip-side::before { content: '\00b7'; margin-right: 9px; }
 
 /* captured pieces: on a chip of light wood, with a pale rim, so that black pieces can be read on the dark page */
+/* drawn as chess sites draw them: pieces of one kind overlap closely, a small step between kinds - fifteen pieces
+   in about 150 px - and the tray is never clipped (what gives way beside it is decided in .player-bar and .opp-state) */
 .strip-caps {
-  flex: 0 1 auto;
+  --cap: 20px;                /* one piece */
+  --cap-step: 6px;            /* from a pawn to the next pawn */
+  --cap-piece: 8px;           /* from a piece to its twin (two rooks must still read as two) */
+  --cap-kind: 14px;           /* from a piece to the first of the next kind */
+  flex: none;
   display: flex;
   align-items: center;
-  min-width: 0;
   height: 24px;
-  padding: 0 6px 0 4px;
-  overflow: hidden;
+  padding: 0 4px 0 3px;
   background: rgba(228, 210, 171, 0.3);
   border-radius: 3px;
 }
@@ -890,18 +911,26 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 .strip-caps img {
   flex: none;
-  width: 22px;
-  height: 22px;
-  margin-right: -8px;
+  width: var(--cap);
+  height: var(--cap);
+  margin-left: calc(var(--cap-piece) - var(--cap));
   filter: drop-shadow(0 0 0.6px rgba(247, 241, 226, 0.95)) drop-shadow(0 0 0.6px rgba(247, 241, 226, 0.95));
 }
-.strip-caps img.gap { margin-left: 7px; }
-.strip-caps img:last-child { margin-right: 0; }
+.strip-caps img.pawn { margin-left: calc(var(--cap-step) - var(--cap)); }
+.strip-caps img.gap { margin-left: calc(var(--cap-kind) - var(--cap)); }
+.strip-caps img:first-child { margin-left: 0; }
 
 .strip-plus { flex: none; font-family: var(--mono); color: var(--gold-bright); letter-spacing: 0.06em; font-size: 0.74rem; }
 
+/* Your strip and the controls. The strip is never narrower than what is in it, and the row wraps: whatever the
+   window, the font or the number of pieces taken, the two cannot be painted over one another. The controller
+   (fitBar in app.js) sets data-fit to the lowest level at which they share the row that --bar-rows promises:
+   1 - the colour word goes; 2 - on a desktop the controls take their short labels, on a phone the tray is drawn
+   tighter; 3 - "You" goes too (the lamp stays), and on a phone the tray is drawn tighter still. */
 .player-bar {
+  --bar-rows: 1;              /* 1: strip and controls side by side; 2: the controls on a row of their own */
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 6px 12px;
@@ -909,12 +938,23 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   margin-top: 8px;
 }
 
-.player-bar .strip { flex: 1 1 auto; padding: 0 4px; }
-
+.player-bar .strip { flex: 1 0 auto; padding: 0 4px; }
 .review-dock { flex: none; display: flex; }
 .review-dock:empty { display: none; }
-
 .tools { display: flex; gap: 6px; flex: none; }
+/* "Back to the game", docked here with the arrows where the scoresheet is out of sight (one column) */
+.player-bar > .review-live { flex: none; }
+.player-bar:is([data-fit="1"], [data-fit="2"], [data-fit="3"]) .strip-side { display: none; }
+.tool-short { display: none; }
+@media (min-width: 1000px) {
+  .player-bar:is([data-fit="2"], [data-fit="3"]) .tool-long { display: none; }
+  .player-bar:is([data-fit="2"], [data-fit="3"]) .tool-short { display: inline; }
+}
+@media (max-width: 999px) {
+  .player-bar:is([data-fit="2"], [data-fit="3"]) .strip-caps { --cap: 16px; --cap-step: 4px; --cap-piece: 5px; --cap-kind: 11px; }
+  .player-bar[data-fit="3"] .strip-caps { --cap-step: 3.5px; --cap-kind: 10px; }
+}
+.player-bar[data-fit="3"] .strip-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 /* ---------- scoresheet ---------- */
 
@@ -1509,10 +1549,48 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 }
 
 /* a small board beside the scoresheet: the controls are set tighter, so your strip keeps room for what you have taken */
-@media (min-width: 1000px) and (max-width: 1279px), (min-width: 1000px) and (max-height: 820px) {
+@media (min-width: 1000px) and (max-width: 1279px), (min-width: 1000px) and (max-height: 940px) {
+
   .tools { gap: 5px; }
   .tools .tool { padding-left: 8px; padding-right: 8px; font-size: 0.64rem; letter-spacing: 0.1em; }
   .player-bar .strip { letter-spacing: 0.12em; gap: 7px; }
+}
+
+/* A short desktop window (a 1366 x 768 laptop leaves about 650 px): the masthead and he shrink first, so that the
+   board stays as large as it can; the controls go on a row of their own under your strip (--bar-h counts both rows);
+   and his strip is as wide as the board and the column beside it together - the board is narrow here, the window is
+   not - so the bubble and the line that says who he is keep their room. */
+@media (min-width: 1000px) and (max-height: 759px) {
+  :root {
+    --mast: 40px; --stage-top: 6px; --stage-bottom: 6px; --bar-h: 60px;
+    --portrait: clamp(112px, 112px + (100vh - 700px) * 0.65, 150px);
+    --opp-h: calc(var(--portrait) + 14px);
+  }
+  .masthead-title { font-size: 1.45rem; }
+  .opp { width: calc(var(--frame) + var(--gap) + var(--side)); }
+  .opp-side { padding: 6px 0 5px; }
+  .opp-id { margin-top: 5px; }
+  .cite { margin-top: calc(var(--opp-h) + var(--state-h)); }
+  .player-bar { --bar-rows: 2; gap: 4px 12px; margin-top: 6px; }
+  .player-bar .strip { height: 26px; }
+  .tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .tools .tool { padding-top: 6px; padding-bottom: 6px; }
+}
+
+
+/* the chooser in a short desktop window: the photographs give up height, so that all four cards stand whole
+   in the window with their "Play him" buttons (1280 x 720, and the 650 px a 1366 x 768 laptop leaves) */
+@media (min-width: 1100px) and (max-height: 800px) {
+  .veil { padding-top: 14px; padding-bottom: 14px; }
+  .chooser-colour { margin-top: 14px; }
+  .levels { margin-top: 16px; }
+  .level-art { aspect-ratio: auto; height: clamp(100px, 100vh - 556px, 228px); }
+  .chooser-foot { margin-top: 14px; }
+}
+/* shorter still: the two lines under the heading go, and the photographs get their height back (the whole face) */
+@media (min-width: 1100px) and (max-height: 700px) {
+  .chooser-sub { display: none; }
+  .level-art { height: clamp(100px, 100vh - 486px, 228px); }
 }
 
 @media (max-width: 1099px) {
@@ -1543,8 +1621,8 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   .scoresheet { flex: none; height: 222px; contain: none; }
 
   /* your strip and the arrows that step through the game on one line, the controls on the next */
-  .player-bar { flex-wrap: wrap; align-content: flex-start; }
-  .player-bar .strip { flex: 1 1 0; height: 44px; }
+  .player-bar { --bar-rows: 2; align-content: flex-start; gap: 6px 8px; }
+  .player-bar .strip { height: 44px; }
   .tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .tool { padding-left: 6px; padding-right: 6px; }
 }
@@ -1622,11 +1700,40 @@ body[data-phase="over"] .opp-status { color: var(--gold-bright); }
   .cite-game { margin-top: 3px; font-size: 0.92rem; }
   .cite-note { margin-top: 3px; }
   .strip { font-size: 0.66rem; letter-spacing: 0.1em; gap: 7px; }
-  .strip-caps img { width: 20px; height: 20px; }
-  .player-bar { margin-top: 6px; }
+  .strip-caps { --cap: 18px; --cap-step: 5px; --cap-piece: 7px; --cap-kind: 12px; }
+  .player-bar { margin-top: 6px; column-gap: 6px; }
+  .player-bar .strip { padding: 0 2px; }
+  .player-bar > .review-live { flex: 1 1 100%; }
   .tool { font-size: 0.66rem; letter-spacing: 0.08em; }
   .review-steps { gap: 3px; }
   .colophon { padding: 12px 14px 22px; }
+}
+
+/* a short phone (both of the browser's bars showing): the masthead and he give up room, so that the controls
+   stay in the window with the board */
+@media (max-width: 520px) and (max-height: 720px) {
+  :root {
+    --mast: 34px; --stage-top: 4px; --stage-bottom: 2px; --state-h: 24px;
+    --opp-h: clamp(124px, 100vh - 100vw - 144px, 170px);
+    --portrait: min(128px, calc(var(--opp-h) - 12px));
+  }
+  @supports (height: 100dvh) {
+    :root { --opp-h: clamp(124px, 100dvh - 100vw - 144px, 170px); }
+  }
+  .masthead-title { font-size: 1.3rem; }
+  .opp-side { padding: 4px 0 3px; }
+  .opp-id { margin-top: 3px; }
+  .opp-name, .opp-title { line-height: 1.15; }
+  .opp-meta { line-height: 1.3; }
+  /* the stamp sits lower on the bubble here: there are only 8 px between the bubble's place and the masthead rule */
+  .bubble[data-kind="quote"] .bubble-tag { top: -5px; }
+  .bubble[data-kind="quote"]:is([data-tight="3"], [data-tight="4"]) .bubble-box { padding-top: 12px; }
+  .player-bar { gap: 4px 6px; margin-top: 4px; }
+}
+
+/* the narrowest phones: he is smaller, so that the bubble keeps a workable width */
+@media (max-width: 340px) {
+  :root { --portrait: min(100px, calc(var(--opp-h) - 12px)); }
 }
 
 /* a phone on its side: the board on the left as tall as the window, everything else beside it */

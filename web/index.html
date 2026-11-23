@@ -70,12 +70,12 @@
         </div>
       </div>
 
-      <div class="player-bar">
+      <div class="player-bar" id="player-bar">
         <div class="strip" id="strip-bottom"></div>
         <div class="review-dock" id="review-dock"></div>
-        <div class="tools" role="toolbar" aria-label="Game controls">
-          <button type="button" class="tool" id="btn-new">New game</button>
-          <button type="button" class="tool" id="btn-back" disabled>Take back</button>
+        <div class="tools" id="tools" role="toolbar" aria-label="Game controls">
+          <button type="button" class="tool" id="btn-new"><span class="tool-long">New game</span><span class="tool-short">New</span></button>
+          <button type="button" class="tool" id="btn-back" disabled><span class="tool-long">Take back</span><span class="tool-short">Undo</span></button>
           <button type="button" class="tool" id="btn-flip">Flip</button>
           <button type="button" class="tool" id="btn-sound" aria-pressed="true">Sound</button>
         </div>
@@ -107,7 +107,7 @@
           </div>
           <button type="button" class="tool" id="btn-pgn">Copy PGN</button>
         </div>
-        <div class="sheet-foot">
+        <div class="sheet-foot" id="sheet-foot">
           <button type="button" class="tool review-live" id="rev-live" hidden>Back to the game</button>
           <span class="sheet-note" id="pgn-note" role="status"></span>
         </div>
