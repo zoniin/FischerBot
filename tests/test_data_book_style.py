@@ -664,6 +664,42 @@ class TestApi:
         assert "<title>FischerBot" in html
         assert "â€" not in html, "mis-encoded punctuation in the page"
 
+    def test_the_page_asks_nothing_of_any_other_host(self, client):
+        """No fonts, scripts, styles or images from elsewhere: a third party that is slow or down
+        cannot leave the page blank, and nobody else learns who visits."""
+        import re
+        from fischerbot.api import WEB_DIR
+        html = client.get("/").get_data(as_text=True)
+        assert not re.search(r"(?:https?:)?//[a-z0-9.-]+\.[a-z]{2,}", html, re.I), "an outside address in the page"
+        for sheet in sorted((WEB_DIR / "static" / "css").glob("*.css")):
+            for target in re.findall(r"url\(\s*['\"]?([^'\")]+)", sheet.read_text(encoding="utf-8")):
+                assert not re.match(r"(?:[a-z]+:)?//|data:", target, re.I), f"{sheet.name}: {target}"
+                assert (sheet.parent / target).resolve().is_file(), f"{sheet.name}: {target} is not in the site"
+        for script in sorted((WEB_DIR / "static" / "js").glob("*.js")):
+            assert not re.search(r"['\"`]https?://", script.read_text(encoding="utf-8")), script.name
+        policy = client.get("/").headers["Content-Security-Policy"]
+        assert "http" not in policy and "unsafe" not in policy and "data:" not in policy
+        for directive in ("default-src 'self'", "script-src 'self'", "style-src 'self'", "font-src 'self'",
+                          "img-src 'self'", "frame-ancestors 'none'", "form-action 'none'"):
+            assert directive in policy, directive
+
+    def test_the_typeface_is_served_by_the_site(self, client):
+        from fischerbot.api import WEB_DIR
+        html = client.get("/").get_data(as_text=True)
+        fonts = sorted((WEB_DIR / "static" / "fonts").glob("*.woff2"))
+        assert len(fonts) == 6
+        assert (WEB_DIR / "static" / "fonts" / "OFL.txt").is_file(), "the typeface travels with its licence"
+        css = (WEB_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8")
+        for font in fonts:
+            assert f"../fonts/{font.name}" in css, f"{font.name} is not used"
+            r = client.get(f"/static/fonts/{font.name}")
+            assert r.status_code == 200 and r.headers["Content-Type"] == "font/woff2"
+            assert r.cache_control.max_age == 24 * 60 * 60
+            assert r.get_data()[:4] == b"wOF2"
+            r.close()
+        for preloaded in ("latin-900-normal", "latin-700-normal", "latin-500-italic"):
+            assert f'href="/static/fonts/playfair-display-{preloaded}.woff2" as="font" type="font/woff2" crossorigin' in html
+
     def test_first_move_is_book_with_citation(self, client):
         r = client.post("/api/move", json={"history": [], "difficulty": "easy"})
         assert r.status_code == 200
@@ -757,6 +793,7 @@ class TestApi:
                 "/static/img/fischer.webp": "image/webp",
                 "/static/img/fischer-192.png": "image/png",
                 "/static/img/pieces/wK.svg": "image/svg+xml",
+                "/static/fonts/playfair-display-latin-700-normal.woff2": "font/woff2",
             }
             for url, content_type in expected.items():
                 r = c.get(url)

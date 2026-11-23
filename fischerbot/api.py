@@ -44,10 +44,11 @@ _SETTINGS = {**DIFFICULTIES, **LEVELS}
 # long is told the server is busy, rather than left in a queue of any length.
 BUSY_WAIT_S = 8.0
 
-# The portrait and the pieces may be kept by a browser for a day; scripts,
-# styles and data are checked against the server on every visit, so that a
-# page is never assembled from two versions of the site.
-IMAGE_MAX_AGE_S = 24 * 60 * 60
+# The portrait, the pieces and the typeface may be kept by a browser for a
+# day; scripts, styles and data are checked against the server on every
+# visit, so that a page is never assembled from two versions of the site.
+KEPT_PATHS = ("/static/img/", "/static/fonts/")
+KEPT_MAX_AGE_S = 24 * 60 * 60
 
 MAX_HISTORY = 1024  # longest legal chess games are far below this
 MAX_BODY_BYTES = 64 * 1024  # a history of MAX_HISTORY moves is under 10 kB of JSON
@@ -64,6 +65,7 @@ STATIC_TYPES = {
     ".svg": "image/svg+xml",
     ".png": "image/png",
     ".webp": "image/webp",
+    ".woff2": "font/woff2",
 }
 
 _bots = {}
@@ -131,21 +133,21 @@ def create_app() -> Flask:
 
     @app.after_request
     def security_headers(response):
+        # Everything the page loads comes from the site itself: its scripts
+        # (ES modules and the worker), stylesheets, typeface, images and data.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src https://fonts.gstatic.com; "
-            "img-src 'self' data:; connect-src 'self'; "
-            "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+            "script-src 'self'; style-src 'self'; font-src 'self'; "
+            "img-src 'self'; connect-src 'self'; "
+            "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'none'"
         )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if request.path.startswith("/static/img/") and response.status_code == 200:
+        if request.path.startswith(KEPT_PATHS) and response.status_code == 200:
             response.cache_control.no_cache = None
             response.cache_control.public = True
-            response.cache_control.max_age = IMAGE_MAX_AGE_S
+            response.cache_control.max_age = KEPT_MAX_AGE_S
         return response
 
     @app.get("/api/health")

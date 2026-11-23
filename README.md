@@ -202,6 +202,7 @@ web/
                   app.js, opponent.js, chooser.js, commentary.js, events.js, ...   the page
   static/data/    book.json, style.json, commentary.json
   static/img/     the portrait (see its README for where it is from), the pieces
+  static/fonts/   the typeface, with its licence
   tests/, tools/
 fischerbot/       the same bot in Python: dataset, book, engine, style, bot, API
 data/             the games, the cached analysis, the record of quotations (see data/README.md)
@@ -226,6 +227,9 @@ Blitz, simultaneous and casual games are left out. His record across them:
   Its author is not known to us; `web/static/img/README.md` says what was
   done to it and how its author can ask for credit or removal.
 * The chess pieces are Colin M.L. Burnett's.
+* The typeface is Playfair Display, by Claus Eggers Sørensen and the Playfair
+  Display Project Authors, under the SIL Open Font License; the site serves
+  its own copy (`web/static/fonts`), and asks nothing of any other host.
 * The piece-square tables in both engines are PeSTO's, by Ronald Friederich.
 * python-chess is used for data preparation, training and as the reference
   the JavaScript rules are tested against.
