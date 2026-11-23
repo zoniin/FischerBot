@@ -74,13 +74,21 @@ only now and then, and never the same line twice in a game. A blunder also
 gets a red **??** on its square, and his verdicts on your moves are in the
 scoresheet.
 
-There are 637 lines in `web/static/data/commentary.json`. Almost all were
+There are 633 lines in `web/static/data/commentary.json`. Almost all were
 written for the bot, in the voice of Fischer at the board: terse, exacting,
 about the moves and nothing else. **Eighteen are his own words**, shown as
 quotations with their source — "Best by test." after 1.e4; "The only trouble
 with the move, however, is that it loses." Each was checked against the text
 before it went in; `data/fischer_quotes.json` is the record, and a test
 refuses any line presented as a quotation that is not in it.
+
+Each Fischer speaks from his own year. A line of the bot's that mentions
+something later - Reykjavik, his book - is not said by the younger ones.
+His real words are kept at every level, but honestly labelled: a quotation
+written after the year of the Fischer you are playing is stamped "As he
+later wrote" rather than "His own words". And each quotation waits for its
+moment - the ones about endgames for an endgame, his case against the
+King's Gambit for the game in which you play it against him.
 
 ## How Fischer-like is it?
 
