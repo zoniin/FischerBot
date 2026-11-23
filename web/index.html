@@ -3,93 +3,190 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FischerBot &mdash; Chess in the Style of Bobby Fischer</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9816;</text></svg>">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/vendor/chessboard-1.0.0.min.css">
+  <title>FischerBot &mdash; Chess against Bobby Fischer</title>
+  <meta name="description" content="Play chess against a bot built from Bobby Fischer's own games: his openings, his style, and what he had to say about it.">
+  <meta name="theme-color" content="#1c1916">
+  <link rel="icon" type="image/png" href="/static/img/fischer-192.png">
+  <link rel="preload" href="/static/fonts/playfair-display-latin-900-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/playfair-display-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/playfair-display-latin-500-italic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/css/board.css">
   <link rel="stylesheet" href="/static/css/style.css">
+  <script type="module" src="/static/js/app.js"></script>
 </head>
-<body>
+<body data-phase="loading">
+
+<div id="page" class="page">
+  <a class="skip-link" href="#board">Skip to the board</a>
 
   <header class="masthead">
     <p class="eyebrow">Reykjav&iacute;k &middot; 1972 &middot; board one</p>
     <h1 class="masthead-title">FISCHERBOT</h1>
-    <p class="masthead-sub">Trained on <em>My 60 Memorable Games</em> &amp; the 1972 World Championship</p>
+    <p class="masthead-sub">Built from his own games: <em>My 60 Memorable Games</em>, the 1972 match and a career at the board</p>
   </header>
 
-  <main class="stage">
+  <main class="stage" id="stage">
 
-    <aside class="col col-controls">
-      <section class="panel" aria-labelledby="controls-heading">
-        <h2 id="controls-heading" class="panel-title">New game</h2>
-        <div class="field">
-          <span class="field-label" id="color-label">Play as</span>
-          <div class="seg" role="group" aria-labelledby="color-label">
-            <button type="button" class="seg-btn is-active" data-color="white" aria-pressed="true">White</button>
-            <button type="button" class="seg-btn" data-color="black" aria-pressed="false">Black</button>
+    <section class="board-col" aria-label="The board">
+
+      <!-- Fischer: the portrait stands on the page, resting on the board; what he says is beside it -->
+      <section class="opp" id="opp" aria-labelledby="opp-name" data-thinking="false" data-speaking="false">
+        <div class="opp-portrait">
+          <img src="/static/img/fischer.webp" alt="Bobby Fischer" width="512" height="512" decoding="async">
+          <span class="opp-year" id="opp-year" aria-hidden="true"></span>
+        </div>
+        <div class="opp-side">
+          <div class="speech">
+            <div class="bubble" id="bubble" aria-live="polite" aria-atomic="true" data-state="empty">
+              <p class="sr-only" id="bubble-said"></p>
+              <div class="bubble-box" aria-hidden="true">
+                <span class="bubble-tag">His own words</span>
+                <p class="bubble-text" id="bubble-text"></p>
+                <p class="bubble-source" id="bubble-source"></p>
+              </div>
+            </div>
+          </div>
+          <div class="opp-id">
+            <h2 class="opp-name" id="opp-name">Bobby Fischer</h2>
+            <p class="opp-title" id="opp-title">&nbsp;</p>
+            <p class="opp-meta" id="opp-meta">&nbsp;</p>
           </div>
         </div>
-        <div class="field">
-          <label class="field-label" for="difficulty">Difficulty</label>
-          <select id="difficulty">
-            <option value="easy">Easy</option>
-            <option value="medium" selected>Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-        </div>
-        <button type="button" id="new-game" class="btn-primary">Begin game</button>
       </section>
 
-      <section class="panel" aria-labelledby="status-heading">
-        <h2 id="status-heading" class="panel-title">Broadcast</h2>
-        <p id="status" class="status-line">Your move &mdash; White to play</p>
-        <p id="check" class="check-flag" hidden>Check</p>
-        <p id="thinking" class="thinking"><span class="thinking-dot" aria-hidden="true"></span>FischerBot is thinking&hellip;</p>
-        <p id="error" class="error-line" role="alert" aria-live="polite" hidden></p>
-      </section>
-    </aside>
+      <!-- the rule he stands on: the state of the game, what he has taken, and "M9" when he sees mate -->
+      <div class="opp-state">
+        <p class="opp-status" id="status" role="status"><span class="lamp" aria-hidden="true"></span><span id="status-text">Setting up the pieces</span></p>
+        <span class="opp-taken" id="opp-taken"></span>
+        <p class="opp-mate" id="opp-mate" role="status" hidden></p>
+      </div>
 
-    <div class="col col-board">
-      <div class="board-frame">
-        <div id="board" aria-label="Chess board"></div>
-        <div id="banner" class="banner" role="status"></div>
-        <div id="promotion" class="promotion" role="dialog" aria-label="Choose a piece to promote to" hidden>
-          <p class="promotion-title">Promote to</p>
-          <div class="promotion-choices">
-            <button type="button" class="promotion-btn" data-piece="q" aria-label="Queen"><img alt="" data-piece-img="Q"></button>
-            <button type="button" class="promotion-btn" data-piece="r" aria-label="Rook"><img alt="" data-piece-img="R"></button>
-            <button type="button" class="promotion-btn" data-piece="b" aria-label="Bishop"><img alt="" data-piece-img="B"></button>
-            <button type="button" class="promotion-btn" data-piece="n" aria-label="Knight"><img alt="" data-piece-img="N"></button>
-          </div>
-          <button type="button" id="promotion-cancel" class="promotion-cancel">Cancel</button>
+      <div class="board-frame" id="board-frame">
+        <div id="board"></div>
+        <div class="error-card" id="error" role="alert" hidden>
+          <p class="error-title">No move from Fischer</p>
+          <p class="error-text" id="error-text"></p>
+          <button type="button" class="btn-primary" id="btn-retry">Try again</button>
         </div>
       </div>
+
+      <div class="player-bar" id="player-bar">
+        <div class="strip" id="strip-bottom"></div>
+        <div class="review-dock" id="review-dock"></div>
+        <div class="tools" id="tools" role="toolbar" aria-label="Game controls">
+          <button type="button" class="tool" id="btn-new"><span class="tool-long">New game</span><span class="tool-short">New</span></button>
+          <button type="button" class="tool" id="btn-back" disabled><span class="tool-long">Take back</span><span class="tool-short">Undo</span></button>
+          <button type="button" class="tool" id="btn-flip">Flip</button>
+          <button type="button" class="tool" id="btn-sound" aria-pressed="true">Sound</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="cite" id="cite" data-kind="none">
+      <p class="kicker" id="cite-label">His games</p>
+      <p class="cite-game" id="cite-game">Nothing of his on the board yet.</p>
+      <p class="cite-note" id="cite-note">&nbsp;</p>
     </div>
 
-    <aside class="col col-sheet">
-      <section class="panel panel-sheet" aria-labelledby="sheet-heading">
-        <h2 id="sheet-heading" class="panel-title">Scoresheet</h2>
-        <ol id="scoresheet" class="scoresheet">
-          <li class="scoresheet-empty">No moves recorded.</li>
-        </ol>
-      </section>
-      <section id="book-panel" class="panel panel-book" aria-labelledby="book-heading">
-        <h2 id="book-heading" class="panel-title">Fischer&rsquo;s book</h2>
-        <p id="book-note" class="book-note">Awaiting the first move.</p>
+    <aside class="record" aria-label="The record of the game">
+      <section class="panel sheet" aria-labelledby="sheet-heading">
+        <header class="sheet-head">
+          <h2 id="sheet-heading" class="panel-title">Scoresheet</h2>
+          <dl class="sheet-names">
+            <div><dt>White</dt><dd id="sheet-white">&nbsp;</dd></div>
+            <div><dt>Black</dt><dd id="sheet-black">&nbsp;</dd></div>
+          </dl>
+        </header>
+        <ol id="scoresheet" class="scoresheet" aria-label="Moves; choose one to look at that position"></ol>
+        <div class="review" id="review">
+          <div class="review-steps" id="review-steps" role="group" aria-label="Look through the game">
+            <button type="button" class="step" id="rev-first" aria-label="Start of the game">&laquo;</button>
+            <button type="button" class="step" id="rev-prev" aria-label="One move back">&lsaquo;</button>
+            <button type="button" class="step" id="rev-next" aria-label="One move forward">&rsaquo;</button>
+            <button type="button" class="step" id="rev-last" aria-label="Latest position">&raquo;</button>
+          </div>
+          <button type="button" class="tool" id="btn-pgn">Copy PGN</button>
+        </div>
+        <div class="sheet-foot" id="sheet-foot">
+          <button type="button" class="tool review-live" id="rev-live" hidden>Back&nbsp;to the&nbsp;game</button>
+          <span class="sheet-note" id="pgn-note" role="status"></span>
+        </div>
       </section>
     </aside>
+
+    <section class="panel engine" id="engine" aria-label="Engine details">
+      <h2 class="engine-head">
+        <button type="button" class="engine-toggle" id="engine-toggle" aria-expanded="false" aria-controls="engine-body">
+          <span>Engine details</span><span class="engine-chevron" aria-hidden="true"></span>
+        </button>
+      </h2>
+      <div class="engine-body" id="engine-body" hidden>
+        <p class="engine-empty" id="engine-empty">He has not moved yet.</p>
+        <dl class="engine-list" id="engine-list" hidden>
+          <div><dt>His move</dt><dd id="eng-move"></dd></div>
+          <div><dt>Came from</dt><dd id="eng-source"></dd></div>
+          <div><dt>Evaluation</dt><dd id="eng-eval"></dd></div>
+          <div><dt>Depth</dt><dd id="eng-depth"></dd></div>
+          <div><dt>Expected line</dt><dd id="eng-pv"></dd></div>
+          <div><dt>Effort</dt><dd id="eng-effort"></dd></div>
+        </dl>
+      </div>
+    </section>
 
   </main>
 
   <footer class="colophon">
-    <p>An opening book of Fischer&rsquo;s own moves, an alpha&ndash;beta search, and a style model trained on his 80 games to choose between sound moves.</p>
+    <p>The moves come from an opening book of Fischer&rsquo;s own games, a search engine running in your browser, and a style model trained on his play.
+      Lines marked &ldquo;his own words&rdquo; are quotations with their source &mdash; &ldquo;as he later wrote&rdquo; where the words are later than the Fischer you are playing; everything else he says here was written for the bot.</p>
+    <p>The portrait is after an image found on TikTok, enlarged and coloured; its author is not known to us.
+      The chess pieces are Colin M.L. Burnett&rsquo;s &ldquo;cburnett&rdquo; set.</p>
   </footer>
+</div>
 
-  <script src="/static/vendor/jquery-3.6.0.min.js"></script>
-  <script src="/static/vendor/chessboard-1.0.0.min.js"></script>
-  <script src="/static/vendor/chess-0.10.3.min.js"></script>
-  <script src="/static/js/app.js"></script>
+<div class="veil" id="chooser" hidden>
+  <div class="chooser" role="dialog" aria-modal="true" aria-labelledby="chooser-title" tabindex="-1">
+    <header class="chooser-head">
+      <p class="eyebrow">Four Fischers &middot; 1956&ndash;1972</p>
+      <h2 class="chooser-title" id="chooser-title">Choose your opponent</h2>
+      <p class="chooser-sub">One player at four moments of his career. Each plays the openings he knew then.</p>
+    </header>
+    <div class="chooser-colour">
+      <span class="kicker" id="colour-label">You play</span>
+      <div class="seg" role="radiogroup" aria-labelledby="colour-label" id="colour-choice">
+        <button type="button" class="seg-btn" role="radio" aria-checked="true" data-colour="white">White</button>
+        <button type="button" class="seg-btn" role="radio" aria-checked="false" data-colour="black" tabindex="-1">Black</button>
+        <button type="button" class="seg-btn" role="radio" aria-checked="false" data-colour="random" tabindex="-1">Either</button>
+      </div>
+    </div>
+    <ol class="levels" id="levels"></ol>
+    <footer class="chooser-foot" id="chooser-foot">
+      <button type="button" class="tool" id="chooser-close">Back to the game</button>
+      <span class="chooser-hint" aria-hidden="true">Esc</span>
+    </footer>
+  </div>
+</div>
+
+<div class="veil veil-end" id="endcard" hidden>
+  <div class="endcard" role="dialog" aria-modal="true" aria-labelledby="end-title" tabindex="-1">
+    <div class="end-art"><img src="/static/img/fischer-wide.webp" alt="Bobby Fischer" width="800" height="800"></div>
+    <div class="end-body">
+      <p class="eyebrow" id="end-kicker"></p>
+      <h2 class="end-title" id="end-title"></h2>
+      <p class="end-score" id="end-score"></p>
+      <p class="end-versus" id="end-versus"></p>
+      <figure class="end-word" id="end-word" hidden>
+        <blockquote id="end-word-text"></blockquote>
+        <figcaption id="end-word-source"></figcaption>
+      </figure>
+      <div class="end-actions">
+        <button type="button" class="btn-primary" id="end-again">Play again</button>
+        <button type="button" class="tool" id="end-new">Another Fischer</button>
+        <button type="button" class="tool" id="end-pgn">Copy PGN</button>
+        <button type="button" class="tool" id="end-close">Look at the board</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

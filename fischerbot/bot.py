@@ -23,7 +23,7 @@ from typing import List, Optional
 
 import chess
 
-from .book import OpeningBook
+from .book import BookMove, OpeningBook
 from .engine import Engine
 from .style import StyleModel, game_phase
 
@@ -31,7 +31,7 @@ DEFAULT_STYLE_MARGIN_CP = 40   # most the bot will ever give up for style
 ENDGAME_STYLE_MARGIN_CP = 15   # endgames punish small inaccuracies: stay closer to the engine
 MAX_STYLE_PROBES = 4           # verification searches per move
 SEARCH_SHARE = 0.9             # of the time budget; the rest is kept for verification
-MIN_STYLE_DEPTH = 3            # a shallower search is too unreliable to deviate from
+MIN_STYLE_DEPTH = 3            # a shallower search is too unreliable to deviate from (unless max_depth itself is lower)
 STYLE_SCORE_LIMIT = 500        # when winning or losing by this much, just play the best move
 
 
@@ -41,6 +41,7 @@ class MoveChoice:
     san: str
     source: str                      # "book" | "search" | "search+style"
     book_citation: Optional[str] = None
+    book_move: Optional[BookMove] = None  # the book entry played: his games with this move
     eval_cp: Optional[int] = None    # from the mover's perspective
     depth: Optional[int] = None
     nodes: Optional[int] = None
@@ -60,12 +61,19 @@ class FischerBot:
         book: Optional[OpeningBook] = None,
         style_model: Optional[StyleModel] = None,
         seed: Optional[int] = None,
+        book_year: Optional[int] = None,
+        book_later: bool = False,
     ):
+        """`book_year` sets the bot in that year of Fischer's career: the book
+        then holds only the games he had played by then (unless `book_later`),
+        and prefers what he was playing at the time."""
         self.time_budget_ms = time_budget_ms
         self.max_depth = max_depth
         self.style_margin_cp = style_margin_cp
+        self.book_year = book_year
+        self.book_later = book_later
         self.engine = Engine()
-        self.book = book if book is not None else (OpeningBook(seed=seed) if use_book else None)
+        self.book = book if book is not None else (OpeningBook.load(seed=seed) if use_book else None)
         self.style = style_model if style_model is not None else (
             StyleModel.load_or_none() if use_style else None
         )
@@ -77,7 +85,7 @@ class FischerBot:
         deadline = start + self.time_budget_ms / 1000.0
 
         if self.book is not None:
-            entry = self.book.choose(board)
+            entry = self.book.choose(board, self.book_year, self.book_later)
             if entry is not None:
                 move = chess.Move.from_uci(entry.uci)
                 return MoveChoice(
@@ -85,6 +93,7 @@ class FischerBot:
                     san=board.san(move),
                     source="book",
                     book_citation=entry.citations[0],
+                    book_move=entry,
                 )
 
         share = SEARCH_SHARE if self.style is not None else 1.0
@@ -127,7 +136,7 @@ class FischerBot:
         whose cost exceeds what its style is worth - or the phase's margin -
         is never played.
         """
-        if self.style is None or result.move is None or result.depth < MIN_STYLE_DEPTH:
+        if self.style is None or result.move is None or result.depth < min(MIN_STYLE_DEPTH, self.max_depth):
             return None
         best_score = result.score_cp
         if abs(best_score) >= STYLE_SCORE_LIMIT:

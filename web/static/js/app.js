@@ -1,301 +1,1344 @@
-/* FischerBot web client.
- *
- * The client owns game state: `history` (UCI strings from the start position)
- * is the source of truth and is sent whole with every /api/move request.
- * The server is stateless and replays it.
- */
-'use strict';
+// app.js - the game controller. All state lives here, in `game`.
+//
+// The other modules know nothing about each other:
+//   board.js          draws a position and reports the move the user made
+//   engine-client.js  asks Fischer (the worker, or silently the server) for his move
+//   events.js         turns what happened into events; commentary.js picks his line
+//   opponent.js       the speech bubble beside his portrait
+//   chooser.js        the "four Fischers" dialog
+//   sound.js, pgn.js  what they say
+//
+// Debug hooks, harmless in production: ?fen=<FEN> and/or ?moves=e2e4,e7e5 start
+// a game from that position (with ?level=<id> and ?color=white|black; link.js
+// reads them), and <body> carries data-phase / data-ply / data-engine for tests
+// to wait on. A game opened from such a link is not the visitor's own until
+// they have made a move in it: until then it is not saved, and the game they
+// had saved is left alone.
 
-(function () {
-  var STATUS_MESSAGES = {
-    checkmate_white: 'Checkmate — White wins',
-    checkmate_black: 'Checkmate — Black wins',
-    stalemate: 'Stalemate — draw',
-    insufficient_material: 'Draw — insufficient material',
-    fifty_moves: 'Draw — fifty-move rule',
-    repetition: 'Draw — threefold repetition'
+import { Position, Move, STARTING_FEN, WHITE, BLACK, PAWN } from './rules.js';
+import { LEVELS } from './bot.js';
+import { Board } from './board.js';
+import { Commentator, gameVariables } from './commentary.js';
+import {
+  eventsForBotMove, moveFacts, newMemory, cleanMemory, outcomeOf, gameOverCategory, capturedMaterial,
+  isMateFor, isMateAgainst, mateMoves,
+} from './events.js';
+import { buildPgn, resultText } from './pgn.js';
+import { EngineClient } from './engine-client.js';
+import { Sound } from './sound.js';
+import { Opponent, attribution, stampFor, typographic } from './opponent.js';
+import { Chooser, bookNote, strengthLabel, unbreakable, withoutYear } from './chooser.js';
+import { gameFromLink, isChessPosition } from './link.js';
+
+const STORE_GAME = 'fischerbot.game.v3';
+const SAVE_VERSION = 1;
+const STORE_PREFS = 'fischerbot.prefs.v3';
+const PIECE_LETTERS = ['', 'P', 'N', 'B', 'R', 'Q', 'K'];
+const PIECE_NAMES = ['', 'pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
+const NBSP = String.fromCharCode(160);   // a space that does not break (kept visible in the source)
+const VERDICT_MARKS = { blunder: '??', mistake: '?', inaccuracy: '?!', good: '!' };
+const VERDICT_WORDS = { blunder: 'blunder', mistake: 'mistake', inaccuracy: 'inaccuracy', good: 'good move' };
+// what to tell the player when neither the engine in the browser nor the server produced a move
+const FAILURES = {
+  unreachable: 'The engine in your browser gave no answer, and the server could not be reached. Check your connection, then try again.',
+  server: 'The engine in your browser gave no answer, and the server answered with an error.',
+  move: 'Neither the engine in your browser nor the server came back with a move that can be played.',
+  position: 'The engine in your browser gave no answer, and the server only plays games from the usual starting position.',
+  internal: 'Something went wrong on this page while his move was being played.',
+};
+const REASONS = {
+  checkmate: 'Checkmate',
+  stalemate: 'Stalemate',
+  repetition: 'Threefold repetition',
+  fifty: 'Fifty-move rule',
+  insufficient: 'Insufficient material',
+};
+const IDLE_MS = 90000;
+const DOTS_AFTER_MS = 900;
+const MUTTER_AFTER_MS = 2100;
+const REPLY_MIN_MS = 450;          // he never answers before your piece has landed
+const OPENING_MIN_MS = 1500;       // ... and lets his greeting be read before 1.e4
+
+const $ = id => document.getElementById(id);
+const pieceUrl = code => `/static/img/pieces/${code}.svg`;
+const sleep = ms => new Promise(resolve => window.setTimeout(resolve, ms));
+const levelById = id => LEVELS.find(level => level.id === id) ?? null;
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+const game = {
+  active: false,
+  level: null,
+  human: WHITE,
+  colourPref: 'white',
+  startFen: STARTING_FEN,
+  start: new Position(),
+  position: new Position(),
+  moves: [],            // UCI
+  sans: [],
+  records: [],          // per ply: { by: 'you' | 'fischer', ... }
+  memory: newMemory(),  // what the commentary remembers (events.js)
+  outcome: null,
+  lastLine: null,       // the last thing he said (shown again after a reload)
+  lastWord: null,       // his line at the end of the game
+  thinking: false,
+  thinkingShown: false,
+  failed: false,
+  token: 0,             // answers to older questions are ignored
+  view: null,           // ply being looked at in review; null = the game itself
+  flipped: false,
+  nudged: false,
+  provisional: false,   // opened from a link, and no move of the visitor's in it yet: not saved
+};
+
+let prefs = { sound: true, colour: 'white', levelId: null, seen: [] };
+let commentator = new Commentator(null);
+let shownPly = -1;
+let boardKey = '';
+let thinkTimers = [];
+let idleTimer = 0;
+let endTimer = 0;
+let noteTimer = 0;
+
+const els = {};
+let board, opponent, chooser, client, sound;
+
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
+
+function readStore(key) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw === null ? null : JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(key, value) {
+  try {
+    if (value === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // private mode, quota: the game simply is not remembered
+  }
+}
+
+function loadPrefs() {
+  const saved = readStore(STORE_PREFS);
+  if (saved === null || typeof saved !== 'object') return;
+  prefs = {
+    sound: saved.sound !== false,
+    colour: ['white', 'black', 'random'].includes(saved.colour) ? saved.colour : 'white',
+    levelId: levelById(saved.levelId) ? saved.levelId : null,
+    seen: Array.isArray(saved.seen) ? saved.seen.filter(id => levelById(id) !== null) : [],
   };
-  var MATE_THRESHOLD_CP = 99000;
-  var MATE_SCORE_CP = 100000;
-  var ERROR_HIDE_MS = 7000;
+}
 
-  var game = new Chess();
-  var board = null;
-  var history = [];       // UCI move list, source of truth for the server
-  var humanColor = 'w';
-  var isThinking = false;
-  var isGameOver = false;
-  var gameSeq = 0;        // discards bot replies that arrive after a New Game
-  var errorTimer = null;
-  var pendingPromotion = null; // {from, to} while the promotion picker is open
-
-  // ---------- rendering ----------
-
-  function isHumansTurn() {
-    return game.turn() === humanColor;
+function save() {
+  writeStore(STORE_PREFS, prefs);
+  if (game.provisional) return;                    // a game from a link: whatever was saved stays as it is
+  if (!game.active) {
+    writeStore(STORE_GAME, null);
+    return;
   }
+  writeStore(STORE_GAME, {
+    v: SAVE_VERSION,
+    levelId: game.level.id,
+    human: game.human === WHITE ? 'w' : 'b',
+    colourPref: game.colourPref,
+    startFen: game.startFen,
+    moves: game.moves,
+    records: game.records,
+    memory: game.memory,
+    commentator: commentator.snapshot(),
+    lastLine: game.lastLine,
+    lastWord: game.lastWord,
+    flipped: game.flipped,
+    nudged: game.nudged,
+  });
+}
 
-  function setThinking(on) {
-    isThinking = on;
-    $('#thinking').toggleClass('is-visible', on);
-  }
+// ---------------------------------------------------------------------------
+// The game
+// ---------------------------------------------------------------------------
 
-  function showError(message) {
-    var $err = $('#error');
-    $err.text(message).prop('hidden', false);
-    if (errorTimer) { window.clearTimeout(errorTimer); }
-    errorTimer = window.setTimeout(function () { $err.prop('hidden', true); }, ERROR_HIDE_MS);
-  }
+function pushMove(move, record = {}) {
+  const by = game.position.turn === game.human ? 'you' : 'fischer';
+  const san = game.position.san(move);
+  game.position.push(move);
+  game.moves.push(move.uci());
+  game.sans.push(san);
+  game.records.push({ by, ...record });
+  return san;
+}
 
-  function renderScoresheet() {
-    var san = game.history();
-    var rows = '';
-    for (var i = 0; i < san.length; i += 2) {
-      rows += '<li><span class="move-no">' + (i / 2 + 1) + '.</span>' +
-        '<span class="ply">' + san[i] + '</span>' +
-        '<span class="ply">' + (san[i + 1] || '') + '</span></li>';
-    }
-    var $sheet = $('#scoresheet');
-    $sheet.html(rows || '<li class="scoresheet-empty">No moves recorded.</li>');
-    $sheet.get(0).scrollTop = $sheet.get(0).scrollHeight;
-  }
+function standardStart() {
+  return game.startFen.split(' ').slice(0, 4).join(' ') === STARTING_FEN.split(' ').slice(0, 4).join(' ');
+}
 
-  function renderStatus(serverStatus) {
-    var $banner = $('#banner');
-    var message;
-    if (serverStatus && serverStatus !== 'playing') {
-      isGameOver = true;
-      message = STATUS_MESSAGES[serverStatus] || 'Game over';
-      $('#status').text(message);
-      $banner.text(message).addClass('is-visible');
-      $('#check').prop('hidden', true);
-      return;
-    }
-    $banner.removeClass('is-visible');
-    var side = game.turn() === 'w' ? 'White' : 'Black';
-    $('#status').text(isHumansTurn()
-      ? 'Your move — ' + side + ' to play'
-      : 'FischerBot — ' + side + ' to play');
-    $('#check').prop('hidden', !game.in_check());
-  }
+/** He says a line, and the game remembers it as the last thing he said. */
+function speak(line, options) {
+  game.lastLine = line;
+  opponent.say(line, options);
+}
 
-  function formatEval(botCp) {
-    var humanCp = -botCp; // server reports from the bot's perspective
-    if (Math.abs(botCp) > MATE_THRESHOLD_CP) {
-      var mateIn = Math.ceil((MATE_SCORE_CP - Math.abs(botCp)) / 2);
-      return humanCp > 0 ? 'mate in ' + mateIn + ' for you' : 'mate in ' + mateIn + ' against you';
-    }
-    var pawns = humanCp / 100;
-    return (pawns >= 0 ? '+' : '') + pawns.toFixed(1);
-  }
+/** Sets up a game. `moves` (UCI) are replayed without comment (a debug hook or a restored game). */
+function setUp({ level, human, colourPref = human === WHITE ? 'white' : 'black', startFen = STARTING_FEN, moves = [] }) {
+  stopThinking();
+  window.clearTimeout(endTimer);
+  window.clearTimeout(idleTimer);
+  game.token += 1;
+  game.active = true;
+  game.level = level;
+  game.human = human;
+  game.colourPref = colourPref;
+  game.startFen = startFen;
+  game.start = new Position(startFen);
+  game.position = new Position(startFen);
+  game.moves = [];
+  game.sans = [];
+  game.records = [];
+  for (const uci of moves) pushMove(game.position.parseUci(uci));
+  game.memory = newMemory();
+  game.outcome = outcomeOf(game.position);
+  game.lastLine = null;
+  game.lastWord = null;
+  game.thinking = false;
+  game.failed = false;
+  game.view = null;
+  game.flipped = false;
+  game.nudged = false;
+  game.provisional = false;
+  opponent.setYear(level.year);                    // a quotation later than this Fischer is stamped as such
+  shownPly = -1;
+  hideError();
+  hideEndCard();
+}
 
-  function renderSourceNote(data) {
-    var $panel = $('#book-panel');
-    var $note = $('#book-note');
-    $panel.removeClass('is-book');
-    if (!data) {
-      $note.text('Awaiting the first move.');
-      return;
-    }
-    if (data.source === 'book') {
-      $panel.addClass('is-book');
-      $note.html($('<span>').text('From ' + (data.book_citation || "Fischer's opening repertoire") + '.').html() +
-        '<span class="book-source">played from the book</span>');
-    } else {
-      var lead = 'Out of the book — searching.';
-      if (data.source === 'search+style') {
-        // The style model preferred this move and the search verified it is sound.
-        lead = 'Out of the book — a Fischer-style choice' +
-          (data.engine_move_san ? ', preferred to the engine\u2019s ' + data.engine_move_san : '') + '.';
-      }
-      var parts = [];
-      if (typeof data.depth === 'number') { parts.push('depth ' + data.depth); }
-      if (typeof data.eval_cp === 'number') { parts.push(formatEval(data.eval_cp)); }
-      $note.html($('<span>').text(lead).html() +
-        (parts.length ? '<span class="book-source">' + parts.join(' · ') + '</span>' : ''));
-    }
-  }
+function beginGame(options, { abandoned = false, provisional = false } = {}) {
+  setUp(options);
+  game.provisional = provisional;
+  const { level, human } = game;
+  client.newGame();
+  commentator.newGame({ year: level.year, side: human === WHITE ? 'black' : 'white' });
+  opponent.silence();
 
-  function highlightLastMove(uci) {
-    $('#board .square-55d63').removeClass('last-move');
-    if (!uci) { return; }
-    $('#board .square-' + uci.slice(0, 2)).addClass('last-move');
-    $('#board .square-' + uci.slice(2, 4)).addClass('last-move');
-  }
+  const firstTime = !prefs.seen.includes(level.id);
+  let line = null;
+  if (abandoned && !firstTime) line = commentator.say('new_game');
+  if (line === null && firstTime) line = commentator.say(`level_${level.year}`);
+  if (line === null) line = commentator.say(human === WHITE ? 'start_as_black' : 'start_as_white');
+  if (!provisional) rememberLevel();
 
-  // ---------- server round-trip ----------
+  render({ animate: false });
+  if (line !== null) speak(line, { urgent: true });
+  save();
+  if (game.outcome !== null) conclude();
+  else if (game.position.turn !== human) askFischer({ opening: game.moves.length === 0 });
+  else armIdle();
+}
 
-  function rollbackHumanMove(message) {
-    game.undo();
-    history.pop();
-    board.position(game.fen());
-    highlightLastMove(history.length ? history[history.length - 1] : null);
-    renderScoresheet();
-    renderStatus(null);
-    showError(message);
-  }
+/** The Fischer of this game is the one played last, and has been met. */
+function rememberLevel() {
+  if (!prefs.seen.includes(game.level.id)) prefs.seen.push(game.level.id);
+  prefs.levelId = game.level.id;
+}
 
-  function handleBotResponse(data) {
-    if (!data.bot_move) {
-      // The human's move ended the game; server confirms the final status.
-      renderStatus(data.status);
-      return;
-    }
-    var applied = game.move({
-      from: data.bot_move.slice(0, 2),
-      to: data.bot_move.slice(2, 4),
-      promotion: data.bot_move.length > 4 ? data.bot_move.charAt(4) : 'q'
-    });
-    if (!applied) {
-      showError('Client rejected server move ' + data.bot_move + '. Start a new game.');
-      return;
-    }
-    history.push(data.bot_move);
-    board.position(game.fen());
-    highlightLastMove(data.bot_move);
-    renderScoresheet();
-    renderSourceNote(data);
-    renderStatus(data.status);
-  }
-
-  function requestBotMove(hadHumanMove) {
-    var seq = gameSeq;
-    setThinking(true);
-    $.ajax({
-      url: '/api/move',
-      method: 'POST',
-      contentType: 'application/json',
-      dataType: 'json',
-      data: JSON.stringify({ history: history.slice(), difficulty: $('#difficulty').val() })
-    }).done(function (data) {
-      if (seq !== gameSeq) { return; }
-      setThinking(false);
-      if (data && data.error) {
-        if (hadHumanMove) { rollbackHumanMove(data.error); } else { showError(data.error); }
-        return;
-      }
-      handleBotResponse(data || {});
-    }).fail(function (xhr) {
-      if (seq !== gameSeq) { return; }
-      setThinking(false);
-      var message = (xhr && xhr.responseJSON && xhr.responseJSON.error)
-        ? xhr.responseJSON.error
-        : 'Could not reach FischerBot (HTTP ' + (xhr && xhr.status ? xhr.status : '?') + ').';
-      if (hadHumanMove) { rollbackHumanMove(message); } else { showError(message); }
-    });
-  }
-
-  // ---------- board events ----------
-
-  function onDragStart(source, piece) {
-    if (isThinking || isGameOver || pendingPromotion || game.game_over()) { return false; }
-    if (!isHumansTurn()) { return false; }
-    if (piece.charAt(0) !== humanColor) { return false; }
-    return true;
-  }
-
-  function isPromotion(source, target) {
-    var candidates = game.moves({ square: source, verbose: true });
-    for (var i = 0; i < candidates.length; i += 1) {
-      if (candidates[i].to === target && candidates[i].promotion) { return true; }
-    }
+function restoreGame() {
+  const saved = readStore(STORE_GAME);
+  if (saved === null || typeof saved !== 'object') return false;
+  const level = levelById(saved.levelId);
+  if (saved.v !== SAVE_VERSION || level === null || !Array.isArray(saved.moves) || typeof saved.startFen !== 'string') {
+    writeStore(STORE_GAME, null);                  // not a game this page wrote: forget it
     return false;
   }
-
-  function playHumanMove(source, target, promotion) {
-    var move = game.move({ from: source, to: target, promotion: promotion });
-    if (move === null) { return false; }
-    var uci = move.from + move.to + (move.promotion || '');
-    history.push(uci);
-    board.position(game.fen());
-    highlightLastMove(uci);
-    renderScoresheet();
-    renderStatus(null);
-    requestBotMove(true);
-    return true;
-  }
-
-  function openPromotion(source, target) {
-    pendingPromotion = { from: source, to: target };
-    var color = humanColor;
-    $('#promotion img').each(function () {
-      $(this).attr('src', '/static/img/pieces/' + color + $(this).data('piece-img') + '.svg');
+  try {
+    setUp({
+      level,
+      human: saved.human === 'b' ? BLACK : WHITE,
+      colourPref: saved.colourPref,
+      startFen: saved.startFen,
+      moves: saved.moves.filter(uci => typeof uci === 'string'),
     });
-    $('#promotion').prop('hidden', false);
-    $('#promotion .promotion-btn').first().trigger('focus');
+    if (!isChessPosition(game.start)) throw new Error('not a chess position');
+  } catch {
+    game.active = false;
+    writeStore(STORE_GAME, null);
+    return false;
   }
-
-  function closePromotion(piece) {
-    var pending = pendingPromotion;
-    pendingPromotion = null;
-    $('#promotion').prop('hidden', true);
-    if (!pending) { return; }
-    if (!piece || !playHumanMove(pending.from, pending.to, piece)) {
-      board.position(game.fen()); // cancelled: put the pawn back
-    }
-  }
-
-  function onDrop(source, target) {
-    if (isPromotion(source, target)) {
-      openPromotion(source, target); // the move is completed once a piece is chosen
-      return undefined;
-    }
-    var move = game.move({ from: source, to: target });
-    if (move === null) { return 'snapback'; }
-    var uci = move.from + move.to;
-    history.push(uci);
-    highlightLastMove(uci);
-    renderScoresheet();
-    renderStatus(null);
-    requestBotMove(true);
-    return undefined;
-  }
-
-  function onSnapEnd() {
-    if (!pendingPromotion) { board.position(game.fen()); }
-  }
-
-  // ---------- game lifecycle ----------
-
-  function newGame() {
-    gameSeq += 1;
-    pendingPromotion = null;
-    $('#promotion').prop('hidden', true);
-    game = new Chess();
-    history = [];
-    isGameOver = false;
-    setThinking(false);
-    humanColor = $('.seg-btn.is-active').data('color') === 'black' ? 'b' : 'w';
-    board.orientation(humanColor === 'w' ? 'white' : 'black');
-    board.position('start', false);
-    highlightLastMove(null);
-    renderScoresheet();
-    renderSourceNote(null);
-    renderStatus(null);
-    $('#error').prop('hidden', true);
-    if (humanColor === 'b') { requestBotMove(false); } // bot opens as White
-  }
-
-  $(function () {
-    board = Chessboard('board', {
-      draggable: true,
-      position: 'start',
-      pieceTheme: '/static/img/pieces/{piece}.svg',
-      onDragStart: onDragStart,
-      onDrop: onDrop,
-      onSnapEnd: onSnapEnd
+  // what is read back may be anything: keep only what has the right shape
+  const isLine = line => line !== null && typeof line === 'object' && typeof line.text === 'string';
+  if (Array.isArray(saved.records) && saved.records.length === game.records.length) {
+    game.records = saved.records.map((record, index) => {
+      const kept = record !== null && typeof record === 'object' ? { ...record } : {};
+      if ('memory' in kept) kept.memory = cleanMemory(kept.memory);
+      return { ...kept, by: game.records[index].by };
     });
-    $('#new-game').on('click', newGame);
-    $('#promotion .promotion-btn').on('click', function () { closePromotion($(this).data('piece')); });
-    $('#promotion-cancel').on('click', function () { closePromotion(null); });
-    $(document).on('keydown', function (event) {
-      if (event.key === 'Escape' && pendingPromotion) { closePromotion(null); }
-    });
-    $('.seg-btn').on('click', function () {
-      $('.seg-btn').removeClass('is-active').attr('aria-pressed', 'false');
-      $(this).addClass('is-active').attr('aria-pressed', 'true');
-    });
-    $(window).on('resize', function () { board.resize(); });
-    renderStatus(null);
+  }
+  game.memory = cleanMemory(saved.memory);
+  game.flipped = saved.flipped === true;
+  game.nudged = saved.nudged === true;
+  game.lastWord = isLine(saved.lastWord) ? saved.lastWord : null;
+  commentator.restore({
+    ...(saved.commentator !== null && typeof saved.commentator === 'object' ? saved.commentator : {}),
+    year: level.year,
+    side: game.human === WHITE ? 'black' : 'white',
   });
-})();
+  opponent.silence();
+  if (isLine(saved.lastLine)) {
+    game.lastLine = saved.lastLine;
+    opponent.say(saved.lastLine, { instant: true });
+  }
+  render({ animate: false });
+  if (game.outcome !== null) endTimer = window.setTimeout(showEndCard, 500);
+  else if (game.position.turn !== game.human) askFischer();
+  else armIdle();
+  return true;
+}
+
+/** ?fen= / ?moves= / ?level= / ?color= : a game from a given position, for tests and for the curious (link.js). */
+function gameFromQuery() {
+  return gameFromLink(window.location.search, { levels: LEVELS, levelId: prefs.levelId });
+}
+
+function canMove() {
+  return game.active && game.outcome === null && !game.thinking && !game.failed && game.view === null
+    && game.position.turn === game.human;
+}
+
+/** The board reports a legal move of the user's. */
+function humanMoved(move) {
+  if (!canMove() || !game.position.isLegal(move)) {
+    renderBoard({ force: true });
+    return;
+  }
+  const facts = moveFacts(game.position, move);
+  pushMove(move, { facts });
+  if (game.provisional) {
+    // a game opened from a link is the visitor's own from their first move in it: now it is saved -
+    // and the address stops being the link, so that a reload brings back their game, not the link's position
+    game.provisional = false;
+    rememberLevel();
+    if (window.location.search !== '') {
+      try { window.history.replaceState(null, '', window.location.pathname + window.location.hash); } catch { /* a sandboxed frame */ }
+    }
+  }
+  window.clearTimeout(idleTimer);
+  playMoveSound(facts);
+  game.outcome = outcomeOf(game.position);
+  if (game.outcome !== null) {
+    render();
+    conclude();
+    return;
+  }
+  askFischer();
+}
+
+function askFischer({ opening = false } = {}) {
+  const token = ++game.token;
+  game.thinking = true;
+  game.thinkingShown = false;
+  game.failed = false;
+  hideError();
+  stopThinkingTimers();
+  thinkTimers.push(window.setTimeout(() => {
+    game.thinkingShown = true;
+    opponent.setThinking(true);
+    opponent.dots();
+    renderStatus();
+  }, DOTS_AFTER_MS + (opening ? OPENING_MIN_MS : 0)));
+  // more than about two seconds: he mutters instead of the bare dots (each mutter once in a game)
+  thinkTimers.push(window.setTimeout(() => {
+    const line = commentator.thinking();
+    if (line !== null) opponent.say(line, { transient: true });
+  }, MUTTER_AFTER_MS + (opening ? OPENING_MIN_MS : 0)));
+  render();
+  save();
+  const question = { fen: game.startFen, moves: [...game.moves], level: game.level.id, timeMs: game.level.timeMs };
+  Promise.all([client.move(question), sleep(opening ? OPENING_MIN_MS : REPLY_MIN_MS)]).then(
+    ([result]) => {
+      if (token !== game.token) return;                   // a new game or a take-back came first
+      try {
+        fischerMoved(result);
+      } catch (error) {
+        // nothing may leave the game hanging on "his move": say so, and offer another try
+        console.error(error);
+        fischerFailed(Object.assign(new Error(String(error?.message ?? error)), { kind: 'internal' }));
+      }
+    },
+    error => {
+      if (token === game.token) fischerFailed(error);
+    },
+  );
+}
+
+function stopThinkingTimers() {
+  for (const timer of thinkTimers) window.clearTimeout(timer);
+  thinkTimers = [];
+}
+
+function stopThinking() {
+  stopThinkingTimers();
+  game.thinking = false;
+  game.thinkingShown = false;
+  if (opponent) opponent.setThinking(false);
+}
+
+function fischerFailed(error) {
+  stopThinking();
+  opponent.settle();
+  game.failed = true;
+  const detail = String(error?.message ?? error ?? '').trim();
+  const kind = Object.hasOwn(FAILURES, error?.kind) ? error.kind : 'internal';
+  // the plain account, and (when it adds something) what was actually reported
+  let text = FAILURES[kind];
+  if (kind === 'server' && detail !== '') {
+    const status = /^The server answered (\d{3})$/.exec(detail);
+    text = status !== null ? `${text.slice(0, -1)} (${status[1]}).` : `${text.slice(0, -1)}: ${detail.replace(/\.$/, '')}.`;
+  }
+  els.errorText.textContent = text;
+  els.error.dataset.kind = kind;
+  els.error.title = detail;
+  els.error.hidden = false;
+  render();
+  // a position set up by a link, and no engine for it here (the worker did not answer; the server plays only
+  // from the usual start): the game cannot go on, so it is not kept - or this card would be all that the
+  // next visit showed. (Should he answer after all, it is the visitor's again from their next move.)
+  if (kind === 'position') {
+    game.provisional = true;
+    writeStore(STORE_GAME, null);
+  }
+  // the message sits on the board, where the eye is; the way out gets the focus
+  if (!chooser.isOpen) els.btnRetry.focus({ preventScroll: true });
+}
+
+function hideError() {
+  if (els.error) els.error.hidden = true;
+}
+
+/** The moves of a principal variation in SAN, with move numbers: "14… Nf6 15. Bg5 h6". */
+function describeLine(position, pv, limit = 6) {
+  const copy = position.copy();
+  const parts = [];
+  for (const [index, uci] of (pv ?? []).slice(0, limit).entries()) {
+    try {
+      const move = copy.parseUci(uci);
+      const san = copy.san(move);
+      if (copy.turn === WHITE) parts.push(`${copy.fullmoveNumber}.${NBSP}${san}`);
+      else parts.push(index === 0 ? `${copy.fullmoveNumber}…${NBSP}${san}` : san);
+      copy.push(move);
+    } catch {
+      break;
+    }
+  }
+  return parts.join(' ');
+}
+
+function fischerMoved(result) {
+  let move;
+  try {
+    move = game.position.parseUci(result.uci);
+  } catch {
+    fischerFailed(Object.assign(new Error(`He answered with a move that cannot be played (${result?.uci})`), { kind: 'move' }));
+    return;
+  }
+  stopThinking();
+  const ply = game.moves.length;
+  const last = ply > 0 ? game.records[ply - 1] : null;
+  const playerFacts = last !== null && last.by === 'you' ? last.facts ?? null : null;
+  const botFacts = moveFacts(game.position, move);
+  const { events, memory, verdict } = eventsForBotMove({
+    result,
+    memory: game.memory,
+    botMove: botFacts,
+    playerMove: playerFacts,
+    playerUci: playerFacts !== null ? game.moves[ply - 1] : null,
+    gameVariables,
+    opensGame: ply === 0 && standardStart(),
+  });
+  const line = describeLine(game.position, result.pv);
+  if (verdict !== null && last !== null) last.verdict = verdict;
+  game.memory = memory;
+  pushMove(move, {
+    source: result.source ?? 'search',
+    evalCp: Number.isFinite(result.evalCp) ? result.evalCp : null,
+    depth: result.depth ?? null,
+    nodes: result.nodes ?? null,
+    timeMs: result.timeMs ?? null,
+    line,
+    engineSan: result.engineSan ?? null,
+    cite: result.book?.game?.cite ?? null,
+    count: result.book?.count ?? null,
+    via: result.via ?? 'worker',
+    memory,
+  });
+  playMoveSound(botFacts);
+  game.outcome = outcomeOf(game.position);
+  if (game.outcome !== null) {
+    render();
+    conclude();
+    return;
+  }
+  const remark = commentator.pick(events, { ply });
+  if (remark !== null) speak(remark);
+  else opponent.settle();
+  render();
+  save();
+  armIdle();
+}
+
+/** The game is over: his last word, the sound, and after a moment the card. */
+function conclude() {
+  stopThinking();
+  window.clearTimeout(idleTimer);
+  const category = gameOverCategory(game.outcome, game.human === WHITE ? BLACK : WHITE);
+  const word = category === null ? null : commentator.say(category, {}, { ply: game.moves.length });
+  game.lastWord = word;
+  if (word !== null) speak(word, { urgent: true, sticky: true });
+  else opponent.settle();
+  window.setTimeout(() => sound.play('end'), 320);
+  render();
+  save();
+  window.clearTimeout(endTimer);
+  endTimer = window.setTimeout(showEndCard, 1500);
+}
+
+function takeBackCount() {
+  if (!game.active || game.moves.length === 0) return 0;
+  let index = game.moves.length - 1;
+  let count = 0;
+  if (game.records[index].by === 'fischer') {
+    count += 1;
+    index -= 1;
+  }
+  if (index < 0 || game.records[index].by !== 'you') return 0;
+  return count + 1;
+}
+
+/** Undoes your last move, and his reply if he has made one. He has something to say about it. */
+function takeBack() {
+  const count = takeBackCount();
+  if (count === 0) return;
+  game.token += 1;                         // whatever he was thinking about no longer matters
+  client.forget();                         // ... and a question still waiting to be sent never is
+  stopThinking();
+  window.clearTimeout(endTimer);
+  hideEndCard();
+  hideError();
+  for (let i = 0; i < count; i += 1) {
+    game.position.pop();
+    game.moves.pop();
+    game.sans.pop();
+    game.records.pop();
+  }
+  game.outcome = null;
+  game.lastWord = null;
+  game.failed = false;
+  game.view = null;
+  const before = [...game.records].reverse().find(record => record.by === 'fischer' && record.memory);
+  game.memory = before ? cleanMemory(before.memory) : newMemory();
+  const line = commentator.say('takeback', {}, { ply: game.moves.length });
+  if (line !== null) speak(line, { urgent: true });
+  else opponent.settle();
+  const fromButton = document.activeElement === els.btnBack;
+  render();
+  // nothing left to take back: the button has gone grey under the keyboard, which goes to the board (not to <body>)
+  if (fromButton && els.btnBack.disabled) focusBoard();
+  save();
+  if (game.position.turn !== game.human) askFischer();
+  else armIdle();
+}
+
+function armIdle() {
+  window.clearTimeout(idleTimer);
+  if (!canMove() || game.nudged) return;
+  idleTimer = window.setTimeout(() => {
+    if (!canMove() || game.nudged) return;
+    if (document.hidden || chooser.isOpen) {
+      armIdle();                              // nobody is looking at the board: the wait starts again
+      return;
+    }
+    const line = commentator.say('idle_nudge', {}, { ply: game.moves.length });
+    game.nudged = true;
+    if (line !== null) speak(line);
+    save();
+  }, IDLE_MS);
+}
+
+/** The keyboard is at the board. */
+function focusBoard() {
+  $('board').querySelector('[role="grid"]')?.focus({ preventScroll: true });
+}
+
+function playMoveSound(facts) {
+  sound.play(facts.check ? 'check' : facts.capture ? 'capture' : 'move');
+}
+
+// ---------------------------------------------------------------------------
+// Review
+// ---------------------------------------------------------------------------
+
+const viewedPly = () => game.view ?? game.moves.length;
+
+function review(ply) {
+  if (!game.active) return;
+  const target = Math.max(0, Math.min(game.moves.length, ply));
+  game.view = target === game.moves.length ? null : target;
+  render();
+}
+
+function positionAt(ply) {
+  return ply >= game.moves.length ? game.position : Position.fromMoves(game.moves.slice(0, ply), game.startFen);
+}
+
+/** "12. Nf3" / "12… Nf6" for the move at a 0-based ply index. */
+function moveLabel(index) {
+  const blackFirst = game.start.turn === BLACK ? 1 : 0;
+  const number = game.start.fullmoveNumber + Math.floor((index + blackFirst) / 2);
+  const white = (index + blackFirst) % 2 === 0;
+  return `${number}${white ? '.' : '…'}${NBSP}${game.sans[index]}`;
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+function phase() {
+  if (!game.active) return chooser.isOpen ? 'choosing' : 'idle';
+  if (game.outcome !== null) return 'over';
+  return game.position.turn === game.human ? 'yours' : 'his';
+}
+
+function render({ animate = true } = {}) {
+  document.body.dataset.phase = phase();
+  document.body.dataset.ply = String(game.moves.length);
+  document.body.dataset.review = String(game.view !== null);
+  document.body.dataset.engine = client.mode;
+  renderBoard({ animate });
+  renderOpponent();
+  renderStatus();
+  renderStrips();
+  renderSheet();
+  renderCite();
+  renderEngine();
+  renderTools();
+  fitBar();
+  keepMoveInSight();          // again, now that everything round the sheet has its size
+}
+
+function renderBoard({ animate = true, force = false } = {}) {
+  const ply = viewedPly();
+  const orientation = game.flipped ? !game.human : game.human;
+  const interactive = canMove() ? game.human : null;
+  const key = `${game.token}|${game.startFen}|${ply}|${game.moves.length}`;
+  if (force || key !== boardKey) {
+    const jump = Math.abs(ply - shownPly);
+    const last = ply > 0 ? Move.fromUci(game.moves[ply - 1]) : null;
+    board.setPosition(positionAt(ply), { lastMove: last, animate: animate && shownPly >= 0 && jump >= 1 && jump <= 2 });
+    boardKey = key;
+    shownPly = ply;
+  }
+  board.setOrientation(orientation);
+  board.setInteractive(interactive);
+  const [square, badge] = badgeAt(ply);
+  board.setBadge(square, badge);
+}
+
+/**
+ * His verdict on your move, as a badge on the square it landed on: shown on
+ * that move and while his reply to it is on the board (even if the reply took
+ * the piece - that is usually why it was a blunder). [square, badge] or [null, null].
+ */
+function badgeAt(ply) {
+  for (const index of [ply - 1, ply - 2]) {
+    const record = index >= 0 ? game.records[index] : undefined;
+    if (!record) break;
+    if (record.by !== 'you') continue;
+    const glyph = VERDICT_MARKS[record.verdict];
+    if (!glyph) break;
+    const to = Move.fromUci(game.moves[index]).to;
+    return [to, { glyph, kind: record.verdict, label: VERDICT_WORDS[record.verdict] }];
+  }
+  return [null, null];
+}
+
+function renderOpponent() {
+  const level = game.level ?? levelById(prefs.levelId);
+  if (level === null) {
+    els.oppTitle.textContent = 'Four Fischers, 1956–1972';
+    els.oppMeta.textContent = 'Choose the one you will face';
+    els.oppYear.textContent = '';
+    return;
+  }
+  els.opp.dataset.level = level.id;
+  els.oppTitle.textContent = unbreakable(level.title);
+  els.oppYear.textContent = String(level.year);
+  // the year and how strong he is - the last only if the level says (never invented here);
+  // where he was that year is on his card in the chooser, and in the tooltip
+  // two pieces that are never broken or cut: where there is no room for both the year gives way (style.css)
+  const strength = strengthLabel(level);
+  const year = document.createElement('span');
+  year.textContent = strength ? `${level.year} · ` : String(level.year);
+  if (strength) year.className = 'opp-meta-year';
+  const how = document.createElement('span');
+  how.textContent = strength ?? '';
+  els.oppMeta.replaceChildren(year, how);
+  els.oppMeta.title = withoutYear(level.subtitle);
+  renderMate();
+}
+
+/** "M9" on his card while he has a forced mate (in nine) - or "−M3" when he is the one being mated. */
+function renderMate() {
+  const ply = viewedPly();
+  let cp = null;
+  for (let index = ply - 1; index >= Math.max(0, ply - 2); index--) {
+    const record = game.records[index];
+    if (record && record.by !== 'you') { cp = Number.isFinite(record.evalCp) ? record.evalCp : null; break; }
+  }
+  let text = '';
+  let label = '';
+  // once the game is over there is nothing left to announce (the result is in the status beside it)
+  const finished = game.outcome !== null && game.view === null;
+  if (finished || !game.active) cp = null;
+  if (cp !== null && isMateFor(cp)) { text = `M${mateMoves(cp)}`; label = `He has mate in ${mateMoves(cp)}`; }
+  else if (cp !== null && isMateAgainst(cp)) { text = `\u2212M${mateMoves(cp)}`; label = `He is mated in ${mateMoves(cp)}`; }
+  els.oppMate.textContent = text;
+  els.oppMate.hidden = text === '';
+  if (label !== '') els.oppMate.setAttribute('aria-label', label);
+  els.oppMate.dataset.side = cp !== null && isMateAgainst(cp) ? 'against' : 'for';
+}
+
+function renderStatus() {
+  let text;
+  if (!game.active) text = 'Awaiting a challenger';
+  else if (game.view !== null) text = game.view === 0 ? 'Review · the start' : `Review · ${moveLabel(game.view - 1)}`;
+  else if (game.outcome !== null) text = `${REASONS[game.outcome.kind]} · ${resultText(game.outcome)}`;
+  else if (game.failed) text = 'No answer';
+  else if (game.position.turn === game.human) text = game.position.isCheck() ? 'Check · your move' : 'Your move';
+  else text = game.thinkingShown ? 'Thinking' : 'His move';
+  if (els.statusText.textContent !== text) els.statusText.textContent = text;
+}
+
+/** The pieces `color` has taken (as small images) and by how much it is ahead: nodes for a strip. */
+function takenNodes(color, position) {
+  const material = game.active ? capturedMaterial(game.start, position) : { lostByWhite: [], lostByBlack: [], balance: 0 };
+  const taken = color === WHITE ? material.lostByBlack : material.lostByWhite;
+  const lead = color === WHITE ? material.balance : -material.balance;
+  const nodes = [];
+  if (taken.length > 0) {
+    const caps = document.createElement('span');
+    caps.className = 'strip-caps';
+    caps.dataset.pieces = color === WHITE ? 'black' : 'white';
+    caps.setAttribute('role', 'img');
+    caps.setAttribute('aria-label', `has taken: ${taken.map(type => PIECE_NAMES[type]).join(', ')}`);
+    let previous = 0;
+    for (const type of taken) {
+      const img = document.createElement('img');
+      img.src = pieceUrl(`${color === WHITE ? 'b' : 'w'}${PIECE_LETTERS[type]}`);
+      img.alt = '';
+      // pieces of one kind overlap (pawns most closely); a wider step where the kind changes
+      if (previous !== 0 && previous !== type) img.className = 'gap';
+      else if (type === PAWN) img.className = 'pawn';
+      previous = type;
+      caps.append(img);
+    }
+    nodes.push(caps);
+  }
+  if (lead > 0) {
+    const plus = document.createElement('span');
+    plus.className = 'strip-plus';
+    plus.textContent = `+${lead}`;
+    plus.setAttribute('aria-label', `ahead by ${lead}`);
+    nodes.push(plus);
+  }
+  return nodes;
+}
+
+/**
+ * Your strip under the board, and what Fischer has taken beside his status
+ * above it. The two do not change places when the board is flipped: his is
+ * the one by his portrait.
+ */
+function renderStrips() {
+  const position = positionAt(viewedPly());
+  const live = game.active && game.outcome === null && game.view === null;
+  const you = game.human;
+  els.oppTaken.replaceChildren(...takenNodes(!you, position));
+
+  const el = els.stripBottom;
+  el.dataset.turn = String(live && position.turn === you);
+  const lamp = document.createElement('span');
+  lamp.className = 'lamp';
+  lamp.setAttribute('aria-hidden', 'true');
+  const name = document.createElement('span');
+  name.className = 'strip-name';
+  name.textContent = game.active ? 'You' : 'Your side';
+  const nodes = [lamp, name];
+  if (game.active) {
+    const side = document.createElement('span');
+    side.className = 'strip-side';
+    side.textContent = you === WHITE ? 'White' : 'Black';
+    nodes.push(side);
+  }
+  el.replaceChildren(...nodes, ...takenNodes(you, position));
+}
+
+/**
+ * Your strip and the controls. In the stylesheet the row wraps, so the two can never be painted over one another;
+ * this picks the lowest data-fit level (see .player-bar in style.css: the colour word goes first, then the labels
+ * shorten or the tray tightens) at which nothing has had to wrap beyond the rows the layout promises (--bar-rows).
+ * It also says where "Back to the game" stands while you look back on a short phone (data-live: beside | row).
+ */
+const BAR_FIT_MAX = 3;
+function fitBar() {
+  const bar = els.playerBar;
+  const strip = els.stripBottom;
+  const style = window.getComputedStyle(bar);
+  const rows = Number.parseInt(style.getPropertyValue('--bar-rows'), 10) || 1;
+  const beside = els.reviewDock.childElementCount > 0 ? [els.reviewDock] : rows === 1 ? [els.tools] : [];
+  // on a short phone "Back to the game" belongs on that row too, beside the arrows (--live-beside in style.css),
+  // so that the controls under it keep their place while you look back
+  const live = !els.revLive.hidden && els.revLive.parentElement === bar && style.getPropertyValue('--live-beside').trim() === '1';
+  const fits = others => {
+    const box = strip.getBoundingClientRect();
+    if (box.width > bar.clientWidth + 0.5) return false;
+    return others.every(other => other.getBoundingClientRect().top < box.bottom - 1);
+  };
+  const choose = others => {
+    let level = 0;
+    bar.dataset.fit = '0';
+    while (level < BAR_FIT_MAX && !fits(others)) {
+      level += 1;
+      bar.dataset.fit = String(level);
+    }
+    return fits(others);
+  };
+  bar.dataset.live = 'beside';
+  if (!live) choose(beside);
+  else if (!choose([...beside, els.revLive])) {
+    // no room for it there whatever the strip gives up (a tray full of captured pieces): it takes a row of its own
+    bar.dataset.live = 'row';
+    choose(beside);
+  }
+}
+
+function renderSheet() {
+  const fischer = 'Bobby Fischer';
+  els.sheetWhite.textContent = !game.active ? NBSP : game.human === WHITE ? 'You' : fischer;
+  els.sheetBlack.textContent = !game.active ? NBSP : game.human === WHITE ? fischer : 'You';
+
+  const rows = [];
+  const current = viewedPly();
+  const hadFocus = els.sheet.contains(document.activeElement);
+  let row = null;
+  let currentButton = null;
+  const blackFirst = game.start.turn === BLACK;
+  const startRow = number => {
+    row = document.createElement('li');
+    const no = document.createElement('span');
+    no.className = 'move-no';
+    no.textContent = `${number}.`;
+    row.append(no);
+    rows.push(row);
+  };
+  game.sans.forEach((san, index) => {
+    const offset = index + (blackFirst ? 1 : 0);
+    const number = game.start.fullmoveNumber + Math.floor(offset / 2);
+    if (offset % 2 === 0 || row === null) {
+      startRow(number);
+      if (offset % 2 === 1) {
+        const blank = document.createElement('span');
+        blank.className = 'ply is-blank';
+        blank.textContent = '…';
+        row.append(blank);
+      }
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ply';
+    button.dataset.ply = String(index + 1);
+    button.append(san);
+    const verdict = game.records[index]?.verdict;
+    let label = `${number}${offset % 2 === 0 ? '.' : '…'} ${san}`;
+    if (verdict && VERDICT_MARKS[verdict]) {
+      const mark = document.createElement('span');
+      mark.className = 'mark';
+      mark.dataset.verdict = verdict;
+      mark.textContent = VERDICT_MARKS[verdict];
+      mark.title = `By his reckoning: ${VERDICT_WORDS[verdict]}`;
+      button.append(mark);
+      label += `, ${VERDICT_WORDS[verdict]}`;
+    }
+    button.setAttribute('aria-label', label);
+    // one tab stop for the whole sheet: the move being looked at (the arrow keys do the walking)
+    button.tabIndex = index + 1 === current || (current === 0 && index === 0) ? 0 : -1;
+    if (index + 1 === current) {
+      button.setAttribute('aria-current', 'true');
+      currentButton = button;
+    }
+    row.append(button);
+  });
+  if (rows.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'scoresheet-empty';
+    empty.textContent = game.active ? 'No moves yet.' : 'The sheet is blank.';
+    rows.push(empty);
+  }
+  if (game.outcome !== null) {
+    const result = document.createElement('li');
+    result.className = 'scoresheet-result';
+    result.textContent = resultText(game.outcome);
+    rows.push(result);
+  }
+  els.sheet.replaceChildren(...rows);
+  if (hadFocus) (currentButton ?? els.sheet.querySelector('button.ply'))?.focus({ preventScroll: true });
+
+  keepMoveInSight();
+
+  const total = game.moves.length;
+  els.revFirst.disabled = els.revPrev.disabled = !game.active || current === 0;
+  els.revNext.disabled = els.revLast.disabled = !game.active || current === total;
+  els.revLive.hidden = game.view === null;
+  els.btnPgn.disabled = !game.active || total === 0;
+}
+
+/**
+ * Keeps the move being looked at in sight (with the line under it, where the result is written), without ever
+ * scrolling the page itself. The sheet is as tall as its column leaves it, and that changes after the moves are
+ * written - the caption above it is filled in, the fonts arrive, the window is resized - so this is called again
+ * whenever the sheet changes size (wire), not only when its contents do.
+ */
+function keepMoveInSight() {
+  const list = els.sheet;
+  const current = list.querySelector('.ply[aria-current="true"]');
+  if (current === null) {
+    list.scrollTop = 0;
+    return;
+  }
+  const line = current.parentElement;
+  const height = line.offsetHeight;
+  const top = line.getBoundingClientRect().top - list.getBoundingClientRect().top - list.clientTop + list.scrollTop;
+  const room = list.clientHeight;
+  if (room <= 0) return;                                             // not laid out (yet)
+  if (top < list.scrollTop) list.scrollTop = top;
+  else if (top + Math.min(height * 2, room) > list.scrollTop + room) list.scrollTop = top + Math.min(height * 2, room) - room;
+}
+
+/** His latest move at or before the position on the board, with what he reported about it. */
+function fischerRecord() {
+  for (let index = viewedPly() - 1; index >= 0; index -= 1) {
+    const record = game.records[index];
+    if (record.by === 'fischer' && record.source) return { record, index };
+  }
+  return null;
+}
+
+function renderCite() {
+  const found = game.active ? fischerRecord() : null;
+  let kind = 'none';
+  let label = 'His games';
+  let text = game.active ? 'Nothing of his on the board yet.' : 'The book is made of his own games.';
+  let note = game.level ? `Book: ${bookNote(game.level).toLowerCase()}` : NBSP;
+  let noteMove = null;          // a move in the note keeps its own case: the note is set in capitals, "1. e4" is not
+  if (found !== null) {
+    const { record, index } = found;
+    if (record.source === 'book' && record.cite) {
+      kind = 'book';
+      label = 'From his own games';
+      text = record.cite;
+      note = record.count > 1 ? `One of ${record.count} games of his with this move` : 'His only game with this move';
+    } else {
+      let lastBook = -1;
+      for (let i = index - 1; i >= 0; i -= 1) {
+        if (game.records[i].by === 'fischer' && game.records[i].source === 'book') {
+          lastBook = i;
+          break;
+        }
+      }
+      if (lastBook >= 0) {
+        kind = 'left';
+        label = 'Out of the book';
+        text = 'From here he finds the moves himself.';
+        note = 'Last move from his games: ';
+        noteMove = moveLabel(lastBook);
+      } else {
+        label = 'His games';
+        text = 'None of his games went this way.';
+        note = 'He is thinking for himself';
+      }
+    }
+  }
+  els.cite.dataset.kind = kind;
+  els.citeLabel.textContent = label;
+  els.citeGame.textContent = text;
+  els.citeNote.textContent = note;
+  if (noteMove !== null) {
+    const san = document.createElement('span');
+    san.className = 'cite-move';
+    san.textContent = noteMove;
+    els.citeNote.append(san);
+  }
+}
+
+function evalText(cp) {
+  if (!Number.isFinite(cp)) return '—';
+  if (isMateFor(cp)) return `Mate in ${mateMoves(cp)} for him`;
+  if (isMateAgainst(cp)) return `Mate in ${mateMoves(cp)} against him`;
+  const pawns = (Math.abs(cp) / 100).toFixed(2);
+  return `${cp > 0 ? '+' : cp < 0 ? '−' : ''}${pawns} (from his side)`;
+}
+
+function renderEngine() {
+  const found = game.active ? fischerRecord() : null;
+  els.engineEmpty.hidden = found !== null;
+  els.engineList.hidden = found === null;
+  if (found === null) return;
+  const { record, index } = found;
+  els.engMove.textContent = moveLabel(index);
+  let source = 'Search';
+  if (record.source === 'book') source = 'His own games (the opening book)';
+  else if (record.source === 'search+style') {
+    source = record.engineSan ? `Style: the search alone preferred ${record.engineSan}` : 'Search, then style';
+  }
+  els.engSource.textContent = source;
+  els.engEval.textContent = record.source === 'book' ? '— (no search for a book move)' : evalText(record.evalCp);
+  els.engDepth.textContent = Number.isFinite(record.depth) ? `${record.depth} plies` : '—';
+  els.engPv.textContent = record.line || '—';
+  const effort = [];
+  if (Number.isFinite(record.nodes)) effort.push(`${record.nodes.toLocaleString('en-US')} positions`);
+  if (Number.isFinite(record.timeMs)) effort.push(`${(record.timeMs / 1000).toFixed(record.timeMs < 100 ? 2 : 1)} s`);
+  effort.push(record.via === 'server' ? 'on the server' : 'in your browser');
+  els.engEffort.textContent = effort.join(' · ');
+}
+
+function renderTools() {
+  els.btnBack.disabled = takeBackCount() === 0;
+  els.btnFlip.disabled = !game.active;
+  els.btnSound.setAttribute('aria-pressed', String(sound.enabled));
+  els.btnSound.setAttribute('aria-label', sound.enabled ? 'Sound is on' : 'Sound is off');
+}
+
+// ---------------------------------------------------------------------------
+// Dialogs: the chooser and the game-over card
+// ---------------------------------------------------------------------------
+
+function syncInert() {
+  els.page.inert = chooser.isOpen || !els.endcard.hidden;
+}
+
+function openChooser() {
+  hideEndCard();
+  chooser.open({
+    levelId: game.level?.id ?? prefs.levelId,
+    colour: prefs.colour,
+    canResume: game.active,
+  });
+  syncInert();
+  document.body.dataset.phase = phase();
+}
+
+function closeChooser() {
+  if (!chooser.isOpen) return;
+  prefs.colour = chooser.colour;
+  // the page comes back to life first: while it is inert nothing in it accepts the focus the chooser hands back
+  els.page.inert = !els.endcard.hidden;
+  chooser.close();
+  syncInert();
+  // opened from something that is no longer there (a button of the game-over card): the way back in gets the focus
+  if (!els.page.contains(document.activeElement)) els.btnNew.focus({ preventScroll: true });
+  render();
+  save();
+  armIdle();
+}
+
+function chosen({ levelId, colour, byKeyboard = false }) {
+  const level = levelById(levelId);
+  if (level === null) return;
+  const abandoned = game.active && game.outcome === null && game.moves.length > 0;
+  prefs.colour = colour;
+  chooser.close({ refocus: false });               // a game begins: the keyboard, if it chose, goes to the board (below)
+  syncInert();
+  const human = colour === 'black' ? BLACK : colour === 'white' ? WHITE : (Math.random() < 0.5 ? WHITE : BLACK);
+  beginGame({ level, human, colourPref: colour }, { abandoned });
+  // chosen from the keyboard: the game has begun, so the keyboard is at the board (not back on <body>)
+  if (byKeyboard) focusBoard();
+}
+
+function showEndCard() {
+  if (game.outcome === null || chooser.isOpen) return;
+  const { outcome } = game;
+  const moveCount = Math.ceil(game.moves.length / 2);
+  els.endKicker.textContent = `${REASONS[outcome.kind]} · ${moveCount} move${moveCount === 1 ? '' : 's'}`;
+  els.endTitle.textContent = outcome.winner === null ? 'A draw' : outcome.winner === game.human ? 'You win' : 'Fischer wins';
+  // the result alone on its line: a title such as "U.S. Champion, 11–0" beside it reads as a second score
+  els.endScore.textContent = resultText(outcome);
+  els.endVersus.textContent = `Against Fischer in ${game.level.year} · ${unbreakable(game.level.title)}`;
+  const word = game.lastWord;
+  els.endWord.hidden = word === null;
+  if (word !== null) {
+    const isQuote = word.quote !== null && typeof word.quote === 'object';
+    els.endWord.dataset.kind = isQuote ? 'quote' : 'line';
+    els.endWordText.textContent = isQuote ? `“${word.text}”` : typographic(word.text);
+    // the same stamp as in the bubble: "his own words", or "as he later wrote" for words later than this Fischer
+    els.endWordSource.textContent = isQuote
+      ? `${attribution(word.quote)} · ${stampFor(word.quote, game.level.year).tag.toLowerCase()}`
+      : 'FischerBot, not Fischer';
+  }
+  els.endcard.hidden = false;
+  syncInert();
+  els.endAgain.focus({ preventScroll: true });
+}
+
+function hideEndCard() {
+  if (!els.endcard || els.endcard.hidden) return;
+  els.endcard.hidden = true;
+  syncInert();
+}
+
+/** "Look at the board", Escape, a click beside the card: it goes, and the keyboard is at the board (not on <body>). */
+function closeEndCard() {
+  if (!els.endcard || els.endcard.hidden) return;
+  const hadFocus = els.endcard.contains(document.activeElement);
+  hideEndCard();
+  if (hadFocus) focusBoard();
+}
+
+function playAgain() {
+  const colour = game.colourPref;
+  const human = colour === 'black' ? BLACK : colour === 'white' ? WHITE : (Math.random() < 0.5 ? WHITE : BLACK);
+  beginGame({ level: game.level, human, colourPref: colour });
+}
+
+// ---------------------------------------------------------------------------
+// PGN
+// ---------------------------------------------------------------------------
+
+function currentPgn() {
+  return buildPgn({
+    sans: game.sans,
+    humanIsWhite: game.human === WHITE,
+    year: game.level?.year ?? null,
+    outcome: game.outcome,
+    startFen: game.startFen,
+    date: new Date(),
+    event: game.level ? `FischerBot: ${game.level.title}` : 'FischerBot',
+    termination: game.outcome ? REASONS[game.outcome.kind].toLowerCase() : null,
+  });
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the old way
+  }
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.append(area);
+  area.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  return ok;
+}
+
+async function copyPgn(button) {
+  if (!game.active) return;
+  const pgn = currentPgn();
+  document.body.dataset.pgn = pgn;                 // also readable by tests and by anyone curious
+  const ok = await copyText(pgn);
+  const original = button.dataset.label ?? button.textContent;
+  button.dataset.label = original;
+  button.textContent = ok ? 'Copied' : 'Could not copy';
+  els.pgnNote.textContent = ok ? 'PGN on the clipboard' : '';
+  window.clearTimeout(noteTimer);
+  noteTimer = window.setTimeout(() => {
+    button.textContent = original;
+    els.endPgn.textContent = els.endPgn.dataset.label ?? els.endPgn.textContent;
+    els.btnPgn.textContent = els.btnPgn.dataset.label ?? els.btnPgn.textContent;
+    els.pgnNote.textContent = '';
+  }, 2200);
+}
+
+// ---------------------------------------------------------------------------
+// Wiring
+// ---------------------------------------------------------------------------
+
+function onKey(event) {
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === 'Escape') {
+    if (chooser.isOpen) closeChooser();
+    else if (!els.endcard.hidden) closeEndCard();
+    else if (game.view !== null) review(game.moves.length);
+    else return;
+    event.preventDefault();
+    return;
+  }
+  if (chooser.isOpen || !els.endcard.hidden || !game.active) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target !== null && target.closest('.cb, input, textarea, select, [role="radio"], [contenteditable]')) return;
+  const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+  if (step !== undefined) {
+    review(viewedPly() + step);
+    event.preventDefault();
+  } else if (event.key === 'Home') {
+    review(0);
+    event.preventDefault();
+  } else if (event.key === 'End') {
+    review(game.moves.length);
+    event.preventDefault();
+  }
+}
+
+function wire() {
+  Object.assign(els, {
+    page: $('page'), status: $('status'), statusText: $('status-text'),
+    opp: $('opp'), oppTitle: $('opp-title'), oppMeta: $('opp-meta'), oppMate: $('opp-mate'),
+    oppYear: $('opp-year'), oppTaken: $('opp-taken'), boardFrame: $('board-frame'),
+    review: $('review'), reviewSteps: $('review-steps'), reviewDock: $('review-dock'),
+    cite: $('cite'), citeLabel: $('cite-label'), citeGame: $('cite-game'), citeNote: $('cite-note'),
+    stripBottom: $('strip-bottom'), playerBar: $('player-bar'), tools: $('tools'), sheetFoot: $('sheet-foot'),
+    btnNew: $('btn-new'), btnBack: $('btn-back'), btnFlip: $('btn-flip'), btnSound: $('btn-sound'),
+    error: $('error'), errorText: $('error-text'), btnRetry: $('btn-retry'),
+    sheet: $('scoresheet'), sheetWhite: $('sheet-white'), sheetBlack: $('sheet-black'),
+    revFirst: $('rev-first'), revPrev: $('rev-prev'), revNext: $('rev-next'), revLast: $('rev-last'), revLive: $('rev-live'),
+    btnPgn: $('btn-pgn'), pgnNote: $('pgn-note'),
+    engineToggle: $('engine-toggle'), engineBody: $('engine-body'), engineEmpty: $('engine-empty'), engineList: $('engine-list'),
+    engMove: $('eng-move'), engSource: $('eng-source'), engEval: $('eng-eval'), engDepth: $('eng-depth'),
+    engPv: $('eng-pv'), engEffort: $('eng-effort'),
+    endcard: $('endcard'), endKicker: $('end-kicker'), endTitle: $('end-title'), endScore: $('end-score'), endVersus: $('end-versus'),
+    endWord: $('end-word'), endWordText: $('end-word-text'), endWordSource: $('end-word-source'),
+    endAgain: $('end-again'), endNew: $('end-new'), endPgn: $('end-pgn'), endClose: $('end-close'),
+  });
+
+  els.btnNew.addEventListener('click', openChooser);
+  els.btnBack.addEventListener('click', takeBack);
+  els.btnFlip.addEventListener('click', () => {
+    game.flipped = !game.flipped;
+    render({ animate: false });
+    save();
+  });
+  els.btnSound.addEventListener('click', () => {
+    sound.enabled = !sound.enabled;
+    prefs.sound = sound.enabled;
+    renderTools();
+    save();
+    sound.play('move');
+  });
+  els.btnRetry.addEventListener('click', () => {
+    if (!game.active || game.outcome !== null || game.position.turn === game.human) return;
+    focusBoard();                                    // the button is about to go
+    askFischer();
+  });
+
+  // one column (and a phone on its side): the scoresheet is under the board, out of sight, so the
+  // arrows that step through the game sit directly under the board instead of under the sheet
+  const narrow = window.matchMedia('(max-width: 999px)');
+  // ... and "Back to the game" goes with them
+  const dockReview = () => {
+    (narrow.matches ? els.reviewDock : els.review).prepend(els.reviewSteps);
+    if (narrow.matches) els.playerBar.insertBefore(els.revLive, els.tools);
+    else els.sheetFoot.prepend(els.revLive);
+    fitBar();
+  };
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(fitBar).observe(els.playerBar);
+    new ResizeObserver(keepMoveInSight).observe(els.sheet);
+  }
+  document.fonts?.ready.then(() => {
+    fitBar();
+    keepMoveInSight();
+  });
+  narrow.addEventListener('change', dockReview);
+  dockReview();
+
+  els.sheet.addEventListener('click', event => {
+    const button = event.target.closest('button.ply');
+    if (button === null) return;
+    review(Number(button.dataset.ply));
+    if (narrow.matches) {
+      // ... and a move chosen from the sheet brings the board it changed back into view
+      const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      els.boardFrame.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+    }
+  });
+  els.revFirst.addEventListener('click', () => review(0));
+  els.revPrev.addEventListener('click', () => review(viewedPly() - 1));
+  els.revNext.addEventListener('click', () => review(viewedPly() + 1));
+  els.revLast.addEventListener('click', () => review(game.moves.length));
+  els.revLive.addEventListener('click', () => review(game.moves.length));
+  els.btnPgn.addEventListener('click', () => copyPgn(els.btnPgn));
+
+  els.engineToggle.addEventListener('click', () => {
+    const open = els.engineToggle.getAttribute('aria-expanded') !== 'true';
+    els.engineToggle.setAttribute('aria-expanded', String(open));
+    els.engineBody.hidden = !open;
+  });
+
+  els.endAgain.addEventListener('click', playAgain);
+  els.endNew.addEventListener('click', openChooser);
+  els.endPgn.addEventListener('click', () => copyPgn(els.endPgn));
+  els.endClose.addEventListener('click', closeEndCard);
+  els.endcard.addEventListener('pointerdown', event => {
+    if (event.target === els.endcard) closeEndCard();
+  });
+
+  document.addEventListener('keydown', onKey);
+  window.addEventListener('pagehide', () => {
+    if (game.active) save();
+  });
+}
+
+async function boot() {
+  loadPrefs();
+  wire();
+  sound = new Sound({ enabled: prefs.sound });
+  client = new EngineClient({
+    onMode: mode => {
+      document.body.dataset.engine = mode;
+    },
+  });
+  client.start();                                   // the book is a large file: start fetching it now
+  opponent = new Opponent({
+    card: $('opp'), bubble: $('bubble'),
+    said: $('bubble-said'), text: $('bubble-text'), source: $('bubble-source'),
+  });
+  chooser = new Chooser($('chooser'), {
+    levels: LEVELS,
+    posterUrl: '/static/img/fischer-wide.webp',
+    onChoose: chosen,
+    onClose: closeChooser,
+  });
+  board = new Board($('board'), { pieceUrl, onMove: humanMoved });
+  render({ animate: false });
+
+  const commentary = await fetch('/static/data/commentary.json')
+    .then(response => (response.ok ? response.json() : null)).catch(() => null);
+  commentator = new Commentator(commentary);
+
+  // ?debug: a handle for tests and tinkering (nothing depends on it)
+  if (new URLSearchParams(window.location.search).has('debug')) {
+    window.fischerbot = { game, say: (line, options) => opponent.say(line, { urgent: true, ...options }) };
+  }
+
+  const fromQuery = gameFromQuery();
+  if (fromQuery !== null) beginGame(fromQuery, { provisional: true });
+  else if (!restoreGame()) openChooser();
+  document.body.dataset.ready = 'true';
+}
+
+boot();

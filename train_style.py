@@ -7,9 +7,11 @@
 Pipeline
 --------
 1. For every position where Fischer was to move, the engine lists the moves
-   it scores within ANALYSIS_WINDOW centipawns of its favourite. That is slow
-   (the better part of an hour on four cores), deterministic, and cached in
-   data/engine_candidates.json.gz.
+   it scores within ANALYSIS_WINDOW centipawns of its favourite. The engine
+   is the one the site plays with - web/static/js/engine.js, run under Node
+   by web/tools/analyse.js - so the model learns from the same judgement it
+   will be combined with. That is slow (about an hour on four cores for the
+   whole corpus), deterministic, and cached in data/engine_candidates.json.gz.
 2. A conditional-logit model is fitted so that, among those playable moves,
    the one Fischer actually chose gets the highest probability. Two of the
    features are the engine's own verdict (centipawns lost, and "is the
@@ -25,9 +27,11 @@ import json
 import math
 import os
 import random
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -36,20 +40,21 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import chess
 
-from fischerbot.dataset import load_corpus
-from fischerbot.engine import Engine
+from fischerbot.dataset import CORE_SOURCES, load_corpus
 from fischerbot.style import (
     ENGINE_BEST, ENGINE_LOSS, MODEL_PATH, N_FEATURES, N_PHASE, PositionContext, StyleModel,
     _REPERTOIRE_OFFSET, feature_names, move_features,
 )
 
-CANDIDATES_PATH = Path(__file__).parent / "data" / "engine_candidates.json.gz"
+ROOT = Path(__file__).parent
+CANDIDATES_PATH = ROOT / "data" / "engine_candidates.json.gz"
+ANALYSE_JS = ROOT / "web" / "tools" / "analyse.js"
 
 # --- engine analysis (changing any of these means re-running --analyse)
-ANALYSIS_DEPTH = 8            # iterative deepening stops here ...
-ANALYSIS_NODES = 50_000       # ... or after this many nodes, whichever is first
+ANALYSIS_NODES = 100_000      # the search stops after this many nodes (about depth 14) ...
+ANALYSIS_DEPTH = 20           # ... or at this depth, whichever comes first
 ANALYSIS_WINDOW = 100         # centipawns: how far below the best move we keep scores
-CANDIDATE_NODES = 100_000     # node budget for scoring the other root moves
+CANDIDATE_NODES = 300_000     # node budget for scoring the other root moves
 
 # --- model
 TRAIN_WINDOW = 60             # moves within this many centipawns form the choice set
@@ -66,55 +71,99 @@ LEARNING_RATE = 0.05
 FOLDS = 8
 SEED = 1972
 
+SOURCE_NAMES = {"m60mg": "My 60 Memorable Games", "wc1972": "1972 World Championship",
+                "career": "other tournaments, matches"}
+
 
 # ------------------------------------------------------------ engine analysis
 
 def decisions(games):
-    """Every Fischer decision: (key, moves played so far, Fischer's move)."""
+    """Every Fischer decision: (key, start FEN, moves played so far, Fischer's move)."""
     out = []
     for fg in games:
         board = fg.game.board()
+        start = board.fen()
         for ply, move in enumerate(fg.game.mainline_moves()):
             if board.turn == fg.fischer_color and board.legal_moves.count() > 1:
-                out.append((f"{fg.source}#{fg.number}:{ply}",
-                            [m.uci() for m in board.move_stack], move.uci()))
+                out.append((f"{fg.key}:{ply}", start, [m.uci() for m in board.move_stack], move.uci()))
             board.push(move)
     return out
 
 
-def _analyse_chunk(chunk):
-    out = {}
-    for key, stack, _fischer in chunk:
-        board = chess.Board()
-        for uci in stack:
-            board.push_uci(uci)
-        engine = Engine()  # fresh engine: results do not depend on processing order
-        result = engine.search(board, time_budget_ms=10 ** 9, max_depth=ANALYSIS_DEPTH,
-                               node_limit=ANALYSIS_NODES)
-        scores = engine.candidates(board, result, ANALYSIS_WINDOW, node_limit=CANDIDATE_NODES)
-        out[key] = {"best": result.move.uci(), "score": result.score_cp,
-                    "depth": result.depth, "moves": scores}
-    return out
+def _finished(path):
+    """Keys already analysed in a (possibly partial) worker output file."""
+    done = {}
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    break  # a line cut short by an interrupted run
+                done[row["key"]] = row
+    return done
 
 
-def analyse(games, workers):
+def analyse(games, workers, work_dir=None):
+    """Run the JavaScript engine over every decision, `workers` Node processes at a time.
+
+    Each worker's output is kept in `work_dir`, so an interrupted run picks up
+    where it stopped when started again with the same directory.
+    """
+    node = shutil.which("node")
+    if node is None:
+        raise SystemExit("The analysis runs the site's JavaScript engine: Node 20+ must be on PATH.")
     todo = decisions(games)
-    print(f"Analysing {len(todo)} positions with {workers} workers "
-          f"(depth {ANALYSIS_DEPTH}, {ANALYSIS_NODES} nodes) ...", flush=True)
+    work = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="fischerbot-analysis-"))
+    work.mkdir(parents=True, exist_ok=True)
+    print(f"Analysing {len(todo)} positions with {workers} Node workers "
+          f"(depth {ANALYSIS_DEPTH}, {ANALYSIS_NODES} nodes; work files in {work}) ...", flush=True)
     start = time.time()
-    chunks = [todo[i::workers * 8] for i in range(workers * 8)]
+    outputs, running = [], []
+    for i in range(workers):
+        out_path = work / f"out-{i}-of-{workers}.jsonl"
+        done = _finished(out_path)
+        with open(out_path, "w", encoding="utf-8") as f:   # drop a half-written last line
+            for row in done.values():
+                f.write(json.dumps(row, separators=(",", ":")) + "\n")
+        in_path = work / f"in-{i}-of-{workers}.jsonl"
+        with open(in_path, "w", encoding="utf-8") as f:
+            for key, fen, stack, _fischer in todo[i::workers]:
+                if key not in done:
+                    f.write(json.dumps({"key": key, "fen": fen, "moves": stack}) + "\n")
+        outputs.append(out_path)
+        command = [node, str(ANALYSE_JS), "--depth", str(ANALYSIS_DEPTH), "--nodes", str(ANALYSIS_NODES),
+                   "--window", str(ANALYSIS_WINDOW), "--candidate-nodes", str(CANDIDATE_NODES)]
+        running.append(subprocess.Popen(command, stdin=open(in_path, encoding="utf-8"),
+                                        stdout=open(out_path, "a", encoding="utf-8")))
+    while any(p.poll() is None for p in running):
+        time.sleep(30)
+        count = sum(sum(1 for _ in open(path, encoding="utf-8")) for path in outputs)
+        print(f"  {count}/{len(todo)} positions, {time.time() - start:.0f}s", flush=True)
+    if any(p.returncode for p in running):
+        raise SystemExit(f"An analysis worker failed; partial results are in {work}")
+
+    engine_name = subprocess.run(
+        [node, "--input-type=module", "-e",
+         f"import {{ ENGINE_NAME }} from {json.dumps(str(ROOT / 'web/static/js/engine.js'))}; console.log(ENGINE_NAME)"],
+        capture_output=True, text=True, check=True).stdout.strip()
     positions = {}
-    with ProcessPoolExecutor(workers) as pool:
-        for done, part in enumerate(pool.map(_analyse_chunk, chunks), 1):
-            positions.update(part)
-            print(f"  {len(positions)}/{len(todo)} positions, {time.time() - start:.0f}s", flush=True)
+    for path in outputs:
+        for key, row in _finished(path).items():
+            row.pop("key")
+            row.pop("nodes", None)
+            positions[key] = row
+    missing = [key for key, *_ in todo if key not in positions]
+    if missing:
+        raise SystemExit(f"{len(missing)} positions were not analysed (first: {missing[0]})")
     payload = {
-        "meta": {"depth": ANALYSIS_DEPTH, "nodes": ANALYSIS_NODES, "window": ANALYSIS_WINDOW,
-                 "candidate_nodes": CANDIDATE_NODES, "positions": len(positions)},
+        "meta": {"engine": engine_name, "depth": ANALYSIS_DEPTH, "nodes": ANALYSIS_NODES,
+                 "window": ANALYSIS_WINDOW, "candidate_nodes": CANDIDATE_NODES,
+                 "positions": len(positions)},
         "positions": dict(sorted(positions.items())),
     }
-    with gzip.open(CANDIDATES_PATH, "wt", encoding="utf-8") as f:
-        json.dump(payload, f, separators=(",", ":"))
+    with gzip.GzipFile(CANDIDATES_PATH, "wb", mtime=0) as raw:   # mtime=0: byte-identical reruns
+        raw.write(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     print(f"Wrote {CANDIDATES_PATH} ({os.path.getsize(CANDIDATES_PATH) / 1024:.0f} KB)")
     return payload
 
@@ -136,7 +185,7 @@ def build_samples(games, candidates, window=TRAIN_WINDOW):
     positions = candidates["positions"]
     samples, stats = [], {"decisions": 0, "outside_window": 0, "forced": 0, "missing": 0}
     for fg in games:
-        game_id = f"{fg.source}#{fg.number}"
+        game_id = fg.key
         board = fg.game.board()
         for ply, move in enumerate(fg.game.mainline_moves()):
             if board.turn == fg.fischer_color and board.legal_moves.count() > 1:
@@ -254,10 +303,15 @@ def score(w, samples, play_window=PLAY_WINDOW):
     """Accuracy of the style choice vs the engine's first choice on the same decisions."""
     out = {"n": len(samples), "style": 0, "engine": 0, "nll": 0.0, "avg_loss": 0.0, "switched": 0}
     by_phase = {p: [0, 0, 0] for p in range(3)}
+    by_source = {}
     for s in samples:
         pick = choose(w, s, play_window)
         out["style"] += pick == s.chosen
         out["engine"] += s.best == s.chosen
+        source = by_source.setdefault(s.game.split("#")[0], [0, 0, 0])
+        source[0] += 1
+        source[1] += pick == s.chosen
+        source[2] += s.best == s.chosen
         out["switched"] += pick != s.best
         out["avg_loss"] += s.loss[pick]
         logits = np.bincount(s.rows, weights=s.vals * w[s.cols], minlength=s.n)
@@ -267,6 +321,7 @@ def score(w, samples, play_window=PLAY_WINDOW):
         by_phase[s.phase][1] += pick == s.chosen
         by_phase[s.phase][2] += s.best == s.chosen
     out["by_phase"] = by_phase
+    out["by_source"] = by_source
     return out
 
 
@@ -277,6 +332,7 @@ def cross_validate(samples, folds=FOLDS, seed=SEED, verbose=True):
     fold_of = {g: i % folds for i, g in enumerate(game_ids)}
     total = {"n": 0, "style": 0, "engine": 0, "nll": 0.0, "avg_loss": 0.0, "switched": 0}
     phases = {p: [0, 0, 0] for p in range(3)}
+    sources = {}
     for fold in range(folds):
         train = [s for s in samples if fold_of[s.game] != fold]
         held = [s for s in samples if fold_of[s.game] == fold]
@@ -287,10 +343,15 @@ def cross_validate(samples, folds=FOLDS, seed=SEED, verbose=True):
         for p in range(3):
             for i in range(3):
                 phases[p][i] += r["by_phase"][p][i]
+        for source, counts in r["by_source"].items():
+            mine = sources.setdefault(source, [0, 0, 0])
+            for i in range(3):
+                mine[i] += counts[i]
         if verbose:
-            print(f"  fold {fold + 1}/{folds}: {r['n']:4d} decisions  "
-                  f"engine {r['engine'] / r['n']:.1%}  with style {r['style'] / r['n']:.1%}")
+            print(f"  fold {fold + 1}/{folds}: {r['n']:5d} decisions  "
+                  f"engine {r['engine'] / r['n']:.1%}  with style {r['style'] / r['n']:.1%}", flush=True)
     total["by_phase"] = phases
+    total["by_source"] = sources
     return total
 
 
@@ -311,7 +372,10 @@ def report(total, stats):
     for p, name in enumerate(("opening", "middlegame", "endgame")):
         cnt, style, engine = total["by_phase"][p]
         if cnt:
-            print(f"  {name:10s} ({cnt:4d}): engine {engine / cnt:.1%} -> with style {style / cnt:.1%}")
+            print(f"  {name:10s} ({cnt:5d}): engine {engine / cnt:.1%} -> with style {style / cnt:.1%}")
+    for source, (cnt, style, engine) in sorted(total["by_source"].items()):
+        print(f"  {SOURCE_NAMES.get(source, source):26s} ({cnt:5d}): "
+              f"engine {engine / cnt:.1%} -> with style {style / cnt:.1%}")
 
 
 def main():
@@ -319,15 +383,21 @@ def main():
     parser.add_argument("--analyse", action="store_true", help="rebuild the engine analysis cache")
     parser.add_argument("--cv-only", action="store_true", help="report accuracy, do not save a model")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
+    parser.add_argument("--work-dir", help="where --analyse keeps its partial results "
+                                           "(reuse it to resume an interrupted run)")
     args = parser.parse_args()
 
     games = list(load_corpus())
     if args.analyse or not CANDIDATES_PATH.exists():
-        candidates = analyse(games, args.workers)
+        candidates = analyse(games, args.workers, args.work_dir)
     else:
         candidates = load_candidates()
 
     samples, stats = build_samples(games, candidates)
+    if stats["missing"]:
+        raise SystemExit(f"The analysis in {CANDIDATES_PATH.name} covers only "
+                         f"{stats['decisions'] - stats['missing']} of {stats['decisions']} decisions "
+                         f"(it was made for another set of games): run with --analyse first.")
     print(f"Corpus: {len(games)} games, {stats['decisions']} Fischer decisions, "
           f"{len(samples)} with at least two playable moves")
 
@@ -343,7 +413,10 @@ def main():
     everything = stats["decisions"]
     model = StyleModel(list(w))
     model.save(metadata={
-        "trained_on": "My 60 Memorable Games + 1972 World Championship (80 games)",
+        "trained_on": f"{len(games)} games: My 60 Memorable Games, the 1972 World Championship "
+                      f"and {sum(1 for g in games if g.source not in CORE_SOURCES)} other "
+                      f"tournament and match games, 1955-1992",
+        "analysis_engine": candidates["meta"].get("engine"),
         "decisions": stats["decisions"],
         "training_decisions": len(samples),
         "choice_set": f"moves the engine scores within {TRAIN_WINDOW}cp of its best "
@@ -359,6 +432,9 @@ def main():
                                "engine_top1": round(total["by_phase"][p][2] / max(1, total["by_phase"][p][0]), 4),
                                "style_top1": round(total["by_phase"][p][1] / max(1, total["by_phase"][p][0]), 4)}
                         for p, name in enumerate(("opening", "middlegame", "endgame"))},
+        "cv_by_source": {source: {"decisions": cnt, "engine_top1": round(engine / max(1, cnt), 4),
+                                  "style_top1": round(style / max(1, cnt), 4)}
+                         for source, (cnt, style, engine) in sorted(total["by_source"].items())},
     })
     print(f"Saved model to {MODEL_PATH}")
     names = feature_names()

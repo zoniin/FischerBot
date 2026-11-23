@@ -1,4 +1,86 @@
-/* FischerBot — "Reykjavik 1972 broadcast": dark, warm, editorial. */
+/* FischerBot — "Reykjavik 1972 broadcast": dark, warm, editorial.
+   The board itself is styled by board.css; this file is everything around it.
+
+   The page, top to bottom in the middle column: the masthead; Fischer (his
+   portrait standing on the page, the speech bubble beside it); a thin rule
+   with the state of the game; the board; your strip and the controls. The
+   caption of the game being followed, the scoresheet and the engine drawer are
+   beside the board when there is room and under it when there is not. Every
+   height above and below the board is a variable, so the board can be sized
+   from the height of the window as well as from its width. */
+
+/* Playfair Display, served by the site itself (web/static/fonts, with its licence): the page asks nothing of
+   any other host. Three faces - 700 and 900 upright, 500 italic - each in two files: the Latin alphabet, and the
+   extended Latin ("Portorož", "Gligorić") that a browser fetches only when such a letter is on the page. */
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/playfair-display-latin-ext-700-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/playfair-display-latin-700-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('../fonts/playfair-display-latin-ext-900-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('../fonts/playfair-display-latin-900-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/playfair-display-latin-ext-500-italic.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/playfair-display-latin-500-italic.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* Lining figures for the fallback faces: Georgia's numerals are old-style
+   ("11-0" reads "II-o"), so its digits are taken from a face that has lining
+   ones. Playfair Display has them built in (font-variant-numeric below). */
+@font-face {
+  font-family: 'FB Lining';
+  src: local('Times New Roman'), local('TimesNewRomanPSMT'), local('Liberation Serif'), local('Tinos'), local('Nimbus Roman'), local('Times');
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: 'FB Lining';
+  font-weight: 700 900;
+  src: local('Times New Roman Bold'), local('TimesNewRomanPS-BoldMT'), local('Liberation Serif Bold'), local('Tinos Bold'), local('Nimbus Roman Bold'), local('Times Bold');
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: 'FB Lining';
+  font-style: italic;
+  src: local('Times New Roman Italic'), local('TimesNewRomanPS-ItalicMT'), local('Liberation Serif Italic'), local('Tinos Italic'), local('Nimbus Roman Italic'), local('Times Italic');
+  unicode-range: U+0030-0039;
+}
 
 :root {
   --bg: #1c1916;
@@ -7,23 +89,46 @@
   --panel-raised: #2b251d;
   --line: #3b3328;
   --line-soft: #2e2820;
+  --edge: #5a4e3d;            /* outlines of things you can press */
   --ink: #ece3cf;
   --ink-dim: #a89c84;
-  --ink-faint: #7d7260;
+  --ink-faint: #9a8e78;       /* the smallest type still clears 4.5:1 on the page and on panels */
   --gold: #c9a35b;
   --gold-bright: #e6c47e;
   --gold-dim: rgba(201, 163, 91, 0.14);
   --walnut-light: #e4d2ab;
   --walnut-dark: #6f4b33;
   --board-edge: #4a3a29;
-  --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
-  --body: Georgia, 'Times New Roman', serif;
+  --paper: #f7f1e2;           /* the speech bubble: the lightest cream on the page */
+  --paper-rest: #d5cab0;
+  --paper-ink: #231c12;
+  --paper-dim: #6b5a3e;
+  --red: #a4553f;
+  --red-bright: #d9694f;
+  --serif: 'Playfair Display', 'FB Lining', Georgia, 'Times New Roman', serif;
+  --body: 'FB Lining', Georgia, 'Times New Roman', serif;
   --mono: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
   --dur: 220ms;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* layout: every height above and below the board */
+  --mast: 84px;             /* the masthead */
+  --opp-h: 186px;           /* Fischer: the portrait, and the bubble's place beside it (a little taller than he is) */
+  --portrait: 164px;
+  --state-h: 28px;          /* the rule he stands on: status, what he has taken, "M9" */
+  --bar-h: 46px;            /* your strip and the controls */
+  --stage-top: 12px;
+  --stage-bottom: 12px;
+  --side: 290px;
+  --gap: 28px;
+  --pad: 24px;
+  --frame-pad: 10px;
+  --frame-max: 780px;
 }
 
 * { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
@@ -35,21 +140,77 @@ body {
   font-family: var(--body);
   font-size: 16px;
   line-height: 1.55;
+  font-variant-numeric: lining-nums;      /* a number is never set in old-style figures here */
   -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 50;
+  padding: 8px 14px;
+  background: var(--gold);
+  color: #221b10;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-radius: 3px;
+}
+
+.skip-link:focus { top: 10px; }
+
+:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 2px;
 }
 
 /* ---------- masthead ---------- */
 
 .masthead {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: var(--mast);
+  padding: 0 20px;
   text-align: center;
-  padding: 44px 20px 30px;
   border-bottom: 1px solid var(--line-soft);
 }
 
+/* the double rule of a title card */
+.masthead::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: min(420px, 60vw);
+  height: 5px;
+  transform: translateX(-50%);
+  border-top: 1px solid var(--gold);
+  border-bottom: 1px solid rgba(201, 163, 91, 0.45);
+}
+
 .eyebrow {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   letter-spacing: 0.34em;
   text-transform: uppercase;
   color: var(--gold);
@@ -59,20 +220,22 @@ body {
   margin: 0;
   font-family: var(--serif);
   font-weight: 900;
-  font-size: clamp(2.6rem, 1.4rem + 5.4vw, 5.2rem);
+  font-size: clamp(1.9rem, 1.3rem + 2vw, 2.7rem);
   line-height: 1;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--ink);
 }
 
 .masthead-sub {
-  margin: 12px auto 0;
-  max-width: 46ch;
+  display: none;
+  margin: 8px auto 0;
   font-family: var(--serif);
   font-style: italic;
   font-weight: 500;
-  font-size: 1.02rem;
+  font-size: 0.95rem;
+  line-height: 1.3;
   color: var(--ink-dim);
+  text-wrap: balance;
 }
 
 .masthead-sub em { color: var(--gold-bright); font-style: italic; }
@@ -80,389 +243,1620 @@ body {
 /* ---------- stage layout ---------- */
 
 .stage {
+  /* everything in the middle column that is not the board frame */
+  --chrome: calc(var(--mast) + var(--stage-top) + var(--opp-h) + var(--state-h) + var(--bar-h) + 8px + var(--stage-bottom));
+  --wmax: calc(100vw - 2 * var(--side) - 2 * var(--gap) - 2 * var(--pad));
+  --frame: clamp(280px, min(var(--wmax), 100vh - var(--chrome)), var(--frame-max));
   display: grid;
-  grid-template-columns: 252px minmax(300px, 600px) 280px;
-  gap: 28px;
+  grid-template-columns: var(--side) var(--frame) var(--side);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "cite   board record"
+    "engine board record";
+  gap: 16px var(--gap);
   justify-content: center;
   align-items: start;
-  padding: 36px 24px 20px;
-  max-width: 1280px;
+  padding: var(--stage-top) var(--pad) var(--stage-bottom);
   margin: 0 auto;
 }
 
-.col { min-width: 0; }
-.col-controls, .col-sheet { display: flex; flex-direction: column; gap: 20px; }
+@supports (height: 100dvh) {
+  .stage { --frame: clamp(280px, min(var(--wmax), 100dvh - var(--chrome)), var(--frame-max)); }
+}
 
-/* ---------- panels ---------- */
+.board-col { grid-area: board; width: var(--frame); min-width: 0; }
+.cite { grid-area: cite; margin-top: calc(var(--opp-h) + var(--state-h)); }
+.engine { grid-area: engine; }
+.record {
+  grid-area: record;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin-top: calc(var(--opp-h) + var(--state-h));
+}
+
+/* ---------- panels and small type ---------- */
 
 .panel {
   background: linear-gradient(180deg, var(--panel-raised), var(--panel));
   border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 18px 18px 20px;
+  padding: 16px 16px 18px;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
 }
 
-.panel-title {
-  margin: 0 0 14px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid var(--line-soft);
+.panel-title,
+.kicker {
+  margin: 0;
   font-family: var(--mono);
   font-weight: 400;
-  font-size: 0.7rem;
-  letter-spacing: 0.28em;
+  font-size: 0.66rem;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
 
-/* ---------- controls ---------- */
+.panel-title {
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line-soft);
+}
 
-.field { margin-bottom: 15px; }
+/* ---------- buttons ---------- */
 
-.field-label {
-  display: block;
-  margin-bottom: 6px;
+.tool {
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  color: var(--ink-dim);
   font-family: var(--mono);
   font-size: 0.68rem;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-dim);
-}
-
-.seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.seg-btn {
-  padding: 9px 0;
-  background: transparent;
-  border: none;
-  color: var(--ink-dim);
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
-  transition: opacity var(--dur) var(--ease);
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
 
-.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
-.seg-btn:hover { color: var(--ink); }
+.tool:hover:not(:disabled) { color: var(--gold-bright); border-color: var(--gold); }
+.tool:active:not(:disabled) { background: var(--gold-dim); }
+.tool:disabled { opacity: 0.5; cursor: default; }
 
-.seg-btn.is-active {
-  background: var(--gold-dim);
-  color: var(--gold-bright);
+/* a switch (sound): a small lamp before the word, lit when on - not a gold outline that makes it look like the main button */
+.tool[aria-pressed]::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  vertical-align: 0.08em;
+  background: var(--gold-bright);
 }
-
-select {
-  width: 100%;
-  padding: 9px 10px;
-  background: var(--bg-deep);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  color: var(--ink);
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: opacity var(--dur) var(--ease);
-}
-
-select:hover { border-color: var(--gold); }
+.tool[aria-pressed="false"] { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--ink-faint); }
+.tool[aria-pressed="false"]::before { background: transparent; box-shadow: inset 0 0 0 1px var(--ink-faint); }
 
 .btn-primary {
-  width: 100%;
-  margin-top: 4px;
-  padding: 12px 0;
+  padding: 11px 18px;
   background: var(--gold);
   border: 1px solid var(--gold);
   border-radius: 3px;
   color: #221b10;
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 0.82rem;
-  letter-spacing: 0.22em;
+  font-size: 0.76rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  transition: transform var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
 
 .btn-primary:hover { background: var(--gold-bright); border-color: var(--gold-bright); transform: translateY(-1px); }
-.btn-primary:active { transform: translateY(0); opacity: 0.9; }
+.btn-primary:active { transform: translateY(0); }
 
-button:focus-visible, select:focus-visible {
-  outline: 2px solid var(--gold-bright);
-  outline-offset: 2px;
+.seg {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  overflow: hidden;
 }
 
-/* ---------- broadcast / status ---------- */
+.seg-btn {
+  padding: 8px 18px;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
 
-.status-line {
+.seg-btn + .seg-btn { border-left: 1px solid var(--edge); }
+.seg-btn:hover { color: var(--ink); }
+.seg-btn[aria-checked="true"] { background: var(--gold-dim); color: var(--gold-bright); }
+.seg-btn:focus-visible { outline-offset: -3px; }
+
+/* ---------- Fischer: the portrait on the page, the bubble beside it ---------- */
+
+.opp {
+  display: grid;
+  grid-template-columns: var(--portrait) minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: end;
+  height: var(--opp-h);
+  padding-left: 2px;
+}
+
+/* the cut-out figure stands directly on the page: no frame, no panel, no box */
+.opp-portrait {
+  position: relative;
+  width: var(--portrait);
+  height: var(--portrait);
+}
+
+/* a little light behind him, so the black suit does not sink into the dark page */
+.opp-portrait::before {
+  content: '';
+  position: absolute;
+  inset: 8% -14% 0;
+  background: radial-gradient(closest-side at 50% 62%, rgba(214, 180, 112, 0.2), rgba(214, 180, 112, 0.07) 60%, transparent);
+  pointer-events: none;
+}
+
+.opp-portrait img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 0 1px rgba(236, 227, 207, 0.22));
+}
+
+/* while he calculates he leans in over the board, slowly */
+.opp[data-thinking="true"] .opp-portrait img { animation: lean 4.5s ease-in-out infinite alternate; }
+
+@keyframes lean {
+  from { transform: none; }
+  to { transform: scale(1.045) rotate(-1.4deg); }
+}
+
+/* which Fischer this is: the year, as on his card in the chooser */
+.opp-year {
+  position: absolute;
+  left: 3px;
+  bottom: 4px;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 0.98rem;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.opp-side {
+  container: oppside / inline-size;
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 10px 0 7px;
+}
+
+/* his name and which Fischer this is: small type under the bubble */
+.opp-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+  min-width: 0;
+  margin-top: 7px;
+  line-height: 1.25;
+}
+
+.opp-name {
   margin: 0;
   font-family: var(--serif);
-  font-size: 1.06rem;
+  font-weight: 700;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
   color: var(--ink);
 }
 
-.check-flag[hidden] {
-  display: none;
-}
-
-.check-flag {
-  display: inline-block;
-  margin: 10px 0 0;
-  padding: 3px 10px;
-  border: 1px solid var(--gold);
-  border-radius: 2px;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
+.opp-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.94rem;
+  line-height: 1.25;
+  white-space: nowrap;
   color: var(--gold-bright);
 }
 
-.thinking {
+.opp-meta {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+/* the year and how strong he is: never cut off - where there is no room for both the year goes (it is on the portrait) */
+.opp-meta span { white-space: nowrap; }
+@container oppside (max-width: 214px) {
+  .opp-meta-year { display: none; }
+}
+
+/* the rule he stands on: the state of the game, what he has taken, and "M9" */
+.opp-state {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin: 12px 0 0;
+  gap: 10px;
+  height: var(--state-h);
+  padding: 0 4px;
+  border-top: 1px solid var(--edge);
+  min-width: 0;
+}
+
+.opp-status {
+  flex: 0 1 auto;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
   color: var(--ink-dim);
-  opacity: 0;
-  transition: opacity var(--dur) var(--ease);
 }
 
-.thinking.is-visible { opacity: 1; }
+.opp-status #status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-.thinking-dot {
-  width: 8px;
-  height: 8px;
+/* a move is written as it is played ("Nf3", "g3"): capitals would turn a pawn move into a piece */
+body[data-review="true"] .opp-status { text-transform: none; letter-spacing: 0.1em; color: var(--gold-bright); }
+
+.lamp {
+  flex: none;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--gold);
-  animation: pulse 1.1s ease-in-out infinite;
+  background: var(--edge);
+  transition: background-color var(--dur) var(--ease);
 }
+
+body[data-phase="his"] .opp-status .lamp { background: var(--gold); animation: pulse 1.1s ease-in-out infinite; }
+body[data-phase="yours"] .opp-status .lamp { background: var(--gold-bright); }
+body[data-phase="yours"] .opp-status { color: var(--ink); }
+body[data-phase="over"] .opp-status { color: var(--gold-bright); }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
   50% { opacity: 1; transform: scale(1); }
 }
 
-.error-line {
-  margin: 12px 0 0;
-  padding: 9px 11px;
-  border-left: 3px solid #a4553f;
-  background: rgba(164, 85, 63, 0.12);
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  color: #dba18d;
+/* what he has taken: pushed to the right, and the first thing to give way when the row is full */
+.opp-taken {
+  flex: 1 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
-/* ---------- board ---------- */
+/* "M9": he has announced mate in nine - a caption at the end of the row, never on top of anything */
+.opp-mate {
+  flex: none;
+  margin: 0;
+  padding: 3px 7px 2px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  color: var(--bg-deep);
+  background: var(--gold-bright);
+  border-radius: 2px;
+}
+.opp-mate[data-side="against"] { color: var(--ink); background: #8f2f26; }
+.opp-mate[hidden] { display: none; }
+
+/* ---------- what he says ---------- */
+
+/* the bubble's place: reserved, so nothing moves when he speaks or falls silent */
+.speech {
+  position: relative;
+  min-height: 0;
+}
+
+.bubble {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+.bubble-box {
+  position: relative;
+  max-width: min(100%, 31rem);
+  padding: 10px 15px 11px;
+  background: var(--paper);
+  border-radius: 12px;
+  color: var(--paper-ink);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+  transform-origin: 0 calc(100% - 24px);
+  transition: background-color 500ms var(--ease), color 500ms var(--ease),
+    box-shadow 500ms var(--ease), opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+/* the tail, pointing left at him */
+.bubble-box::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  bottom: 17px;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  border-bottom-left-radius: 3px;
+  transform: rotate(45deg);
+}
+
+.bubble-text {
+  position: relative;
+  margin: 0;
+  font-family: var(--body);
+  font-size: 1.02rem;
+  line-height: 1.38;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+
+.bubble-text .untyped { color: transparent; }
+
+/* the size of the text is measured the moment it is set (Opponent.#fit): it must never be in transition,
+   whatever a blanket rule (reduced motion gives every element a 0.01 ms transition) says */
+.bubble-text, .bubble-text * { transition: none !important; }
+.bubble[data-fitting], .bubble[data-fitting] *, .bubble[data-fitting] *::before { transition: none !important; }
+
+.bubble-source,
+.bubble-tag { display: none; }
+
+/* a line too tall for its place (a long quotation, a narrow phone, a wider fallback font) is set smaller, a step at a time */
+.bubble[data-tight="1"] .bubble-text { font-size: 0.9rem !important; line-height: 1.32 !important; }
+.bubble[data-tight="2"] .bubble-text { font-size: 0.82rem !important; line-height: 1.28 !important; }
+.bubble[data-tight="3"] .bubble-text { font-size: 0.76rem !important; line-height: 1.24 !important; }
+.bubble[data-tight="4"] .bubble-text { font-size: 0.7rem !important; line-height: 1.2 !important; }
+.bubble:is([data-tight="2"], [data-tight="3"], [data-tight="4"]) .bubble-box { padding: 7px 12px 8px; }
+.bubble:is([data-tight="2"], [data-tight="3"], [data-tight="4"]) .bubble-source { margin-top: 4px; padding-top: 3px; font-size: 0.68rem; }
+.bubble[data-tight="4"] .bubble-source { font-size: 0.64rem; line-height: 1.25; }
+.bubble[data-kind="quote"]:is([data-tight="3"], [data-tight="4"]) .bubble-box { padding-top: 10px; }
+
+/* A line too tall for its place even at the smallest size (the longest quotations on a short phone) is given his
+   whole column: the bubble comes down over the line that says who he is, which steps aside until the next line. */
+.opp[data-crowded="true"] .opp-id { visibility: hidden; }
+.opp[data-crowded="true"] .bubble { bottom: calc(-1 * var(--crowd, 0px)); }
+
+/* nothing said yet */
+.bubble[data-state="empty"] .bubble-box { opacity: 0; transform: scale(0.9); }
+
+/* he is speaking: the bubble pops out of the portrait */
+.bubble[data-state="open"] .bubble-box { animation: speak 260ms var(--ease); }
+
+@keyframes speak {
+  from { opacity: 0; transform: scale(0.86) translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* said a while ago: the paper dims, but it can still be read */
+.bubble[data-state="rest"] .bubble-box {
+  background: var(--paper-rest);
+  color: #2e2619;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* a real quotation is typeset as one: a gold band, his own words in italics, the source beneath */
+.bubble[data-kind="quote"] .bubble-box { padding-top: 14px; box-shadow: inset 0 4px 0 var(--gold), 0 10px 22px rgba(0, 0, 0, 0.35); }
+.bubble[data-kind="quote"][data-state="rest"] .bubble-box { box-shadow: inset 0 4px 0 rgba(160, 124, 58, 0.75), 0 6px 14px rgba(0, 0, 0, 0.25); }
+
+.bubble[data-kind="quote"] .bubble-text {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.02rem;
+  line-height: 1.34;
+}
+
+.bubble[data-kind="quote"][data-long="true"] .bubble-text { font-size: 0.94rem; }
+
+.bubble[data-kind="quote"] .bubble-source {
+  display: block;
+  margin: 6px 0 0;
+  padding-top: 5px;
+  border-top: 1px solid rgba(107, 90, 62, 0.35);
+  font-family: var(--body);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--paper-dim);
+  /* the attribution arrives when the words have been typed, not before */
+  opacity: 0;
+  transition: opacity 300ms var(--ease);
+}
+
+.bubble[data-kind="quote"][data-typed="true"] .bubble-source { opacity: 1; }
+.bubble[data-kind="quote"][data-state="rest"] .bubble-source { color: #564830; }
+.bubble-source cite { font-style: italic; }
+/* a quotation that has had to be set smaller keeps its source to one line: the name gives way (the stamp says whose words) */
+.bubble:is([data-tight="1"], [data-tight="2"], [data-tight="3"], [data-tight="4"]) .bubble-by { display: none; }
+
+.bubble[data-kind="quote"] .bubble-tag {
+  display: block;
+  position: absolute;
+  right: 12px;
+  top: -9px;
+  padding: 2px 7px;
+  background: var(--bg-deep);
+  border: 1px solid var(--gold);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--gold-bright);
+  opacity: 0;
+}
+
+/* "his own words" lands like a stamp once the quotation is complete */
+.bubble[data-kind="quote"][data-typed="true"] .bubble-tag { opacity: 1; animation: stamp 200ms var(--ease); }
+.bubble[data-kind="quote"][data-state="rest"] .bubble-tag { animation: none; }
+
+@keyframes stamp {
+  from { opacity: 0; transform: scale(1.3) rotate(-4deg); }
+  to { opacity: 1; transform: none; }
+}
+
+/* thinking: three quiet dots, in the same place */
+.bubble[data-kind="dots"] .bubble-box { min-width: 66px; }
+.bubble[data-kind="dots"] .bubble-text { display: flex; gap: 6px; align-items: center; justify-content: center; height: 1.38em; }
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--paper-dim);
+  animation: dot 1.2s ease-in-out infinite;
+}
+
+.dot:nth-child(2) { animation-delay: 0.15s; }
+.dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* ---------- the game of his being followed: set like a caption ---------- */
+
+.cite {
+  min-width: 0;
+  min-height: 104px;
+  padding: 1px 0 2px 14px;
+  border-left: 2px solid var(--line);
+  transition: border-color var(--dur) var(--ease);
+}
+
+.cite .kicker { transition: color var(--dur) var(--ease); }
+
+.cite-game {
+  margin: 6px 0 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.98rem;
+  line-height: 1.3;
+  color: var(--ink-dim);
+  text-wrap: balance;
+}
+
+.cite-note {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+/* a move named in the note is written as a move: "1. e4", not "1. E4" */
+.cite-note .cite-move { text-transform: none; letter-spacing: 0.04em; white-space: nowrap; }
+
+/* one accent only: the rule and the kicker turn gold, the name of the game stays ink */
+.cite[data-kind="book"] { border-left-color: var(--gold); }
+.cite[data-kind="book"] .kicker { color: var(--gold); }
+.cite[data-kind="book"] .cite-game { color: var(--ink); }
+
+/* ---------- engine details ---------- */
+
+.engine { padding: 0; }
+.engine-head { margin: 0; }
+
+.engine-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color var(--dur) var(--ease);
+}
+
+.engine-toggle:hover { color: var(--gold-bright); }
+
+.engine-chevron {
+  width: 7px;
+  height: 7px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform var(--dur) var(--ease);
+}
+
+.engine-toggle[aria-expanded="true"] .engine-chevron { transform: rotate(225deg) translate(-2px, -2px); }
+
+.engine-body { padding: 2px 16px 14px; border-top: 1px solid var(--line-soft); }
+.engine-body[hidden] { display: none; }
+
+.engine-empty { margin: 10px 0 0; font-style: italic; font-size: 0.9rem; color: var(--ink-faint); }
+
+.engine-list { margin: 0; }
+.engine-list[hidden] { display: none; }
+
+.engine-list > div {
+  display: grid;
+  grid-template-columns: 7.6em minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--line-soft);
+}
+
+.engine-list > div:last-child { border-bottom: none; }
+
+.engine-list dt {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  color: var(--ink-faint);
+}
+
+.engine-list dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- board column ---------- */
 
 .board-frame {
   position: relative;
-  padding: 12px;
+  padding: var(--frame-pad);
   background: linear-gradient(180deg, #2e261c, #251e15);
   border: 1px solid var(--board-edge);
-  border-radius: 4px;
+  border-radius: 0 0 4px 4px;
   box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
 }
 
-#board { width: 100%; }
+#board { width: 100%; aspect-ratio: 1 / 1; }
 
-#board .board-b72b1 { border: 1px solid var(--board-edge); }
-#board .white-1e1d7 { background-color: var(--walnut-light); color: var(--walnut-dark); }
-#board .black-3c85d { background-color: var(--walnut-dark); color: var(--walnut-light); }
-
-#board .square-55d63.last-move { box-shadow: inset 0 0 0 3px rgba(201, 163, 91, 0.8); }
-
-.banner {
+/* neither engine answered: said on the board, where the eye is, with the way out */
+.error-card {
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 50%;
   top: 50%;
-  padding: 16px 20px;
-  background: rgba(22, 19, 15, 0.94);
-  border-top: 1px solid var(--gold);
-  border-bottom: 1px solid var(--gold);
+  z-index: 40;
+  width: min(84%, 430px);
+  padding: 18px 20px 20px;
+  transform: translate(-50%, -50%);
+  background: var(--bg-deep);
+  border: 1px solid var(--red-bright);
+  border-top-width: 4px;
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
   text-align: center;
-  font-family: var(--serif);
-  font-weight: 700;
-  font-size: 1.35rem;
-  color: var(--gold-bright);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(-50%) scale(0.97);
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  animation: card 320ms var(--ease);
 }
 
-.banner.is-visible { opacity: 1; transform: translateY(-50%) scale(1); }
+.error-card[hidden] { display: none; }
+
+.error-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.error-text {
+  margin: 8px 0 14px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: #e3b3a3;
+  overflow-wrap: anywhere;
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.strip .lamp { background: var(--edge); }
+.strip[data-turn="true"] .lamp { background: var(--gold-bright); box-shadow: 0 0 0 3px rgba(230, 196, 126, 0.16); }
+.strip[data-turn="true"] .strip-name { color: var(--ink); }
+
+.strip-name { color: var(--ink-dim); transition: color var(--dur) var(--ease); }
+.strip-side { color: var(--ink-faint); }
+
+.strip-side::before { content: '\00b7'; margin-right: 9px; }
+
+/* captured pieces: on a chip of light wood, with a pale rim, so that black pieces can be read on the dark page */
+/* drawn as chess sites draw them: pieces of one kind overlap closely, a small step between kinds - fifteen pieces
+   in about 150 px - and the tray is never clipped (what gives way beside it is decided in .player-bar and .opp-state) */
+.strip-caps {
+  --cap: 20px;                /* one piece */
+  --cap-step: 6px;            /* from a pawn to the next pawn */
+  --cap-piece: 8px;           /* from a piece to its twin (two rooks must still read as two) */
+  --cap-kind: 14px;           /* from a piece to the first of the next kind */
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 4px 0 3px;
+  background: rgba(228, 210, 171, 0.3);
+  border-radius: 3px;
+}
+
+.strip-caps[data-pieces="white"] { background: rgba(228, 210, 171, 0.1); }
+
+.strip-caps img {
+  flex: none;
+  width: var(--cap);
+  height: var(--cap);
+  margin-left: calc(var(--cap-piece) - var(--cap));
+  filter: drop-shadow(0 0 0.6px rgba(247, 241, 226, 0.95)) drop-shadow(0 0 0.6px rgba(247, 241, 226, 0.95));
+}
+.strip-caps img.pawn { margin-left: calc(var(--cap-step) - var(--cap)); }
+.strip-caps img.gap { margin-left: calc(var(--cap-kind) - var(--cap)); }
+.strip-caps img:first-child { margin-left: 0; }
+
+.strip-plus { flex: none; font-family: var(--mono); color: var(--gold-bright); letter-spacing: 0.06em; font-size: 0.74rem; }
+
+/* Your strip and the controls. The strip is never narrower than what is in it, and the row wraps: whatever the
+   window, the font or the number of pieces taken, the two cannot be painted over one another. The controller
+   (fitBar in app.js) sets data-fit to the lowest level at which they share the row that --bar-rows promises:
+   1 - the colour word goes; 2 - on a desktop the controls take their short labels, on a phone the tray is drawn
+   tighter; 3 - "You" goes too (the lamp stays), and on a phone the tray is drawn tighter still. */
+.player-bar {
+  --bar-rows: 1;              /* 1: strip and controls side by side; 2: the controls on a row of their own */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-height: var(--bar-h);
+  margin-top: 8px;
+}
+
+.player-bar .strip { flex: 1 0 auto; padding: 0 4px; }
+.review-dock { flex: none; display: flex; }
+.review-dock:empty { display: none; }
+.tools { display: flex; gap: 6px; flex: none; }
+/* "Back to the game", docked here with the arrows where the scoresheet is out of sight (one column) */
+.player-bar > .review-live { flex: none; }
+.player-bar:is([data-fit="1"], [data-fit="2"], [data-fit="3"]) .strip-side { display: none; }
+.tool-short { display: none; }
+@media (min-width: 1000px) {
+  .player-bar:is([data-fit="2"], [data-fit="3"]) .tool-long { display: none; }
+  .player-bar:is([data-fit="2"], [data-fit="3"]) .tool-short { display: inline; }
+}
+@media (max-width: 999px) {
+  .player-bar:is([data-fit="2"], [data-fit="3"]) .strip-caps { --cap: 16px; --cap-step: 4px; --cap-piece: 5px; --cap-kind: 11px; }
+  .player-bar[data-fit="3"] .strip-caps { --cap-step: 3.5px; --cap-kind: 10px; }
+}
+.player-bar[data-fit="3"] .strip-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 /* ---------- scoresheet ---------- */
 
-.panel-sheet { display: flex; flex-direction: column; }
+.sheet {
+  flex: 1 1 auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-bottom: 14px;
+}
+
+.sheet-names {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 10px 0 0;
+}
+
+.sheet-names dt {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* a name written on the dotted line of the form */
+.sheet-names dd {
+  margin: 1px 0 0;
+  padding-bottom: 3px;
+  border-bottom: 1px dotted var(--ink-faint);
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.98rem;
+  line-height: 1.3;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .scoresheet {
-  margin: 0;
+  flex: 1 1 0;
+  min-height: 136px;
+  contain: size;                 /* however long the game, the sheet scrolls inside its place and never stretches the page */
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
-  max-height: 336px;
   overflow-y: auto;
-  font-family: var(--mono);
-  font-size: 0.86rem;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
+  scrollbar-color: var(--edge) transparent;
+  /* the ruled lines of the form, whether or not a move is written on them */
+  background: repeating-linear-gradient(180deg, transparent 0 29px, var(--line-soft) 29px 30px);
+  background-attachment: local;
 }
 
 .scoresheet li {
   display: grid;
-  grid-template-columns: 2.6em 1fr 1fr;
-  gap: 8px;
-  padding: 4px 8px;
-  border-bottom: 1px dotted var(--line-soft);
+  grid-template-columns: 2.5em 1fr 1fr;
+  align-items: stretch;
+  height: 30px;
 }
 
-.scoresheet li:nth-child(odd) { background: rgba(0, 0, 0, 0.14); }
-
-.scoresheet .move-no { color: var(--ink-faint); text-align: right; }
-.scoresheet .ply { color: var(--ink); }
-.scoresheet li:last-child .ply:last-child { color: var(--gold-bright); }
-
-.scoresheet-empty {
-  color: var(--ink-faint);
-  font-style: italic;
-  border-bottom: none !important;
-  background: none !important;
-  display: block !important;
-}
-
-/* ---------- promotion picker ---------- */
-
-.promotion[hidden] { display: none; }
-
-.promotion {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 5;
-  padding: 16px 18px 14px;
-  background: rgba(22, 19, 15, 0.97);
-  border: 1px solid var(--gold);
-  border-radius: 4px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
-  text-align: center;
-}
-
-.promotion-title {
-  margin: 0 0 10px;
+.scoresheet .move-no {
+  align-self: center;
+  padding-right: 8px;
+  text-align: right;
   font-family: var(--mono);
   font-size: 0.7rem;
-  letter-spacing: 0.24em;
+  color: var(--ink-faint);
+}
+
+.scoresheet .ply {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 8px;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--line-soft);
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.scoresheet .ply:hover { background: var(--gold-dim); }
+.scoresheet .ply:focus-visible { outline-offset: -2px; }
+.scoresheet .ply[aria-current="true"] { background: var(--gold-dim); color: var(--gold-bright); box-shadow: inset 2px 0 0 var(--gold); }
+.scoresheet .ply.is-blank { cursor: default; color: var(--ink-faint); }
+.scoresheet .ply.is-blank:hover { background: none; }
+
+.scoresheet .mark {
+  font-family: var(--mono);
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--red-bright);
+}
+
+.scoresheet .mark[data-verdict="good"] { color: var(--gold); }
+.scoresheet .mark[data-verdict="mistake"] { color: #e08a3c; }
+.scoresheet .mark[data-verdict="inaccuracy"] { color: var(--ink-dim); }
+
+.scoresheet-result {
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--gold-bright);
+}
+
+.scoresheet-empty {
+  display: flex !important;
+  align-items: center;
+  padding: 0 10px;
+  font-style: italic;
+  font-size: 0.9rem;
+  color: var(--ink-faint);
+}
+
+.review {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  min-height: 32px;
+}
+
+.review-steps { display: flex; gap: 4px; }
+
+.step {
+  width: 32px;
+  height: 30px;
+  padding: 0 0 3px;
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  color: var(--ink-dim);
+  font-family: var(--body);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.step:hover:not(:disabled) { color: var(--gold-bright); border-color: var(--gold); }
+.step:disabled { opacity: 0.5; cursor: default; }
+
+.review-live { color: var(--gold-bright); border-color: var(--gold); }
+.review-live[hidden] { display: none; }
+
+.sheet-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+  min-height: 32px;
+}
+
+.sheet-note {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--gold);
 }
 
-.promotion-choices { display: flex; gap: 8px; }
-
-.promotion-btn {
-  width: 62px;
-  height: 62px;
-  padding: 4px;
-  background: var(--walnut-light);
-  border: 1px solid var(--board-edge);
-  border-radius: 3px;
-  cursor: pointer;
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-}
-
-.promotion-btn:hover { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--gold); }
-.promotion-btn img { width: 100%; height: 100%; display: block; }
-
-.promotion-cancel {
-  margin-top: 12px;
-  padding: 4px 10px;
-  background: none;
-  border: none;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-
-.promotion-cancel:hover { color: var(--ink); }
-
-/* ---------- book panel ---------- */
-
-.panel-book { transition: opacity var(--dur) var(--ease); }
-
-.book-note {
-  margin: 0;
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 0.98rem;
-  color: var(--ink-dim);
-  transition: opacity var(--dur) var(--ease);
-}
-
-.panel-book.is-book { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold-dim), 0 14px 30px rgba(0, 0, 0, 0.28); }
-.panel-book.is-book .panel-title { color: var(--gold); border-color: rgba(201, 163, 91, 0.35); }
-.panel-book.is-book .book-note { color: var(--gold-bright); font-size: 1.04rem; }
-
-.book-note .book-source {
-  display: block;
-  margin-top: 6px;
-  font-family: var(--mono);
-  font-style: normal;
-  font-size: 0.7rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-/* ---------- colophon ---------- */
+/* ---------- colophon: the footnote of the page ---------- */
 
 .colophon {
   max-width: 1280px;
-  margin: 8px auto 0;
-  padding: 14px 24px 30px;
+  margin: 10px auto 0;
+  padding: 16px 24px 28px;
   border-top: 1px solid var(--line-soft);
   text-align: center;
+  font-family: var(--body);
+  font-style: italic;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.colophon p { margin: 0 auto; max-width: 68ch; text-wrap: pretty; }
+.colophon p + p { margin-top: 6px; color: var(--ink-faint); }
+
+/* ---------- the chooser: four Fischers ---------- */
+
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  overflow-y: auto;
+  padding: 24px 20px;
+  background:
+    radial-gradient(1100px 520px at 50% -120px, rgba(201, 163, 91, 0.08), transparent 70%),
+    var(--bg-deep);
+  animation: veil 240ms ease-out;
+}
+
+.veil[hidden] { display: none; }
+
+@keyframes veil { from { opacity: 0; } to { opacity: 1; } }
+
+.chooser {
+  width: min(1200px, 100%);
+  margin: auto;
+  outline: none;
+}
+
+.chooser-head { text-align: center; }
+
+.chooser-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: clamp(1.7rem, 1.1rem + 2.4vw, 2.9rem);
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.chooser-sub {
+  margin: 10px auto 0;
+  max-width: 56ch;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--ink-dim);
+  text-wrap: balance;
+}
+
+.chooser-colour {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin: 20px 0 0;
+}
+
+.chooser-colour .kicker { flex: none; white-space: nowrap; }   /* "You play" is one line, however narrow the phone */
+
+.levels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.levels li { display: flex; min-width: 0; }
+
+.level {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+/* the lift belongs to the pointer; the keyboard gets the ring and the gold edge, and the row stays level */
+.level:hover,
+.level:focus-visible {
+  border-color: var(--gold);
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--gold-dim);
+}
+
+@media (hover: hover) {
+  .level:hover { transform: translateY(-4px); }
+}
+
+/* the same photograph on all four, in full colour: the year, the title and the pips tell them apart */
+.level-art {
+  position: relative;
+  display: block;
+  flex: none;
+  aspect-ratio: 5 / 4;
+  overflow: hidden;
+  border-bottom: 1px solid var(--gold);
+  background: var(--bg-deep);
+}
+
+.level-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 24%;
+  transition: transform 500ms var(--ease);
+}
+
+@media (hover: hover) {
+  .level:hover .level-art img { transform: scale(1.04); }
+}
+
+/* a shadow under the year, so that the numeral does not sit on the white shirt */
+.level-art::after {
+  content: '';
+  position: absolute;
+  inset: 50% 0 0 0;
+  background: linear-gradient(to top, rgba(22, 19, 15, 0.86), rgba(22, 19, 15, 0));
+  pointer-events: none;
+}
+
+.level-year {
+  position: absolute;
+  z-index: 1;
+  left: 12px;
+  bottom: 6px;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 2.5rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.level-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  padding: 14px 16px 16px;
+  min-width: 0;
+}
+
+.level-title {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1.15;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+.level-sub {
+  margin-top: 6px;
+  min-height: 3em;                 /* two lines reserved: titles, blurbs and rules line up across the row */
   font-family: var(--mono);
-  font-size: 0.7rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--gold);
+}
+
+.level-blurb {
+  margin-top: 8px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--ink-dim);
+  text-wrap: pretty;
+}
+
+.level-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: auto;
+  padding-top: 14px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+.level-strength { display: flex; align-items: center; gap: 9px; color: var(--gold-bright); }
+
+.level-pips { display: flex; gap: 4px; flex: none; }
+
+.level-pips i {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--gold-bright);
+  border-radius: 50%;
+}
+
+.level-pips i.on { background: var(--gold-bright); }
+
+/* the action: it looks like the button it is */
+.level-cta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(201, 163, 91, 0.6);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.level-arrow { font-family: var(--body); font-size: 1rem; line-height: 1; letter-spacing: 0; transition: transform var(--dur) var(--ease); }
+
+.level:hover .level-cta,
+.level:focus-visible .level-cta { background: var(--gold); border-color: var(--gold); color: #221b10; }
+.level:hover .level-arrow,
+.level:focus-visible .level-arrow { transform: translateX(3px); }
+
+/* the Fischer you played last: a quiet mark, not a selection */
+.level[data-last="true"] { border-color: rgba(201, 163, 91, 0.5); }
+.level[data-last="true"] .level-book::after { content: ' \00b7  played last'; color: var(--gold); }
+
+.chooser-foot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.chooser-foot[hidden] { display: none; }
+
+.chooser-hint {
+  padding: 1px 6px;
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
   letter-spacing: 0.1em;
   color: var(--ink-faint);
 }
 
-.colophon p { margin: 0; }
+/* ---------- game over ---------- */
+
+.veil-end { background: rgba(18, 15, 12, 0.82); }
+
+.endcard {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  width: min(640px, 100%);
+  margin: auto;
+  background: linear-gradient(180deg, var(--panel-raised), var(--panel));
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  outline: none;
+  animation: card 320ms var(--ease);
+}
+
+@keyframes card {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.error-card { animation-name: card-centred; }
+@keyframes card-centred {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+.end-art { background: var(--bg-deep); border-right: 1px solid var(--gold); }
+.end-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 46% 20%; }
+
+.end-body { padding: 22px 22px 20px; min-width: 0; }
+
+.end-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.end-score {
+  margin: 6px 0 0;
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  color: var(--gold-bright);
+}
+
+.end-versus {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
+.end-word {
+  margin: 14px 0 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--gold);
+}
+
+.end-word[hidden] { display: none; }
+
+.end-word blockquote {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 1.02rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.end-word[data-kind="quote"] blockquote { font-family: var(--serif); font-style: italic; font-weight: 500; }
+
+.end-word figcaption {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
+.end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.end-actions .btn-primary { flex: 1 1 100%; }
+.end-actions .tool { flex: 1 1 auto; }
 
 /* ---------- responsive ---------- */
 
-@media (max-width: 1120px) {
-  .stage {
-    grid-template-columns: minmax(0, 620px);
-    justify-items: stretch;
-  }
-  .col-board { order: 1; }
-  .col-controls { order: 2; }
-  .col-sheet { order: 3; }
-  .scoresheet { max-height: 240px; }
+/* a tall window has room for the strapline */
+@media (min-height: 1000px) and (min-width: 1000px) {
+  :root { --mast: 116px; }
+  .masthead-sub { display: block; }
 }
 
-@media (max-width: 480px) {
-  .stage { padding: 22px 12px 14px; gap: 16px; }
-  .masthead { padding: 30px 14px 22px; }
-  .board-frame { padding: 7px; }
-  .banner { font-size: 1.05rem; }
-  .promotion-btn { width: 50px; height: 50px; }
+/* an ordinary laptop window: the masthead gives its room to the board */
+@media (max-height: 940px) {
+  :root { --mast: 50px; --opp-h: 180px; --portrait: 160px; }
+  .masthead .eyebrow { display: none; }
+  .masthead-title { font-size: 1.7rem; }
+}
+
+/* a short window: so does the portrait, a little */
+@media (max-height: 820px) {
+  :root { --mast: 46px; --opp-h: 166px; --portrait: 150px; --stage-top: 8px; --stage-bottom: 8px; --bar-h: 44px; --state-h: 26px; }
+}
+
+/* two columns: the board, and beside it the caption, the scoresheet and the engine drawer */
+@media (max-width: 1279px) {
+  :root { --side: 280px; --gap: 24px; }
+  .stage {
+    --wmax: calc(100vw - var(--side) - var(--gap) - 2 * var(--pad));
+    grid-template-columns: var(--frame) var(--side);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "board cite"
+      "board record"
+      "board engine";
+    gap: 14px var(--gap);
+  }
+  .cite { margin-top: 10px; min-height: 112px; }
+  .record { margin-top: 0; }
+}
+
+/* a small board beside the scoresheet: the controls are set tighter, so your strip keeps room for what you have taken */
+@media (min-width: 1000px) and (max-width: 1279px), (min-width: 1000px) and (max-height: 940px) {
+
+  .tools { gap: 5px; }
+  .tools .tool { padding-left: 8px; padding-right: 8px; font-size: 0.64rem; letter-spacing: 0.1em; }
+  .player-bar .strip { letter-spacing: 0.12em; gap: 7px; }
+}
+
+/* A short desktop window (a 1366 x 768 laptop leaves about 650 px): the masthead and he shrink first, so that the
+   board stays as large as it can; the controls go on a row of their own under your strip (--bar-h counts both rows);
+   and his strip is as wide as the board and the column beside it together - the board is narrow here, the window is
+   not - so the bubble and the line that says who he is keep their room. */
+@media (min-width: 1000px) and (max-height: 759px) {
+  :root {
+    --mast: 40px; --stage-top: 6px; --stage-bottom: 6px; --bar-h: 60px;
+    --portrait: clamp(112px, 112px + (100vh - 700px) * 0.65, 150px);
+    --opp-h: calc(var(--portrait) + 14px);
+  }
+  .masthead-title { font-size: 1.45rem; }
+  .opp { width: calc(var(--frame) + var(--gap) + var(--side)); }
+  .opp-side { padding: 6px 0 5px; }
+  .opp-id { margin-top: 5px; }
+  .cite { margin-top: calc(var(--opp-h) + var(--state-h)); }
+  .player-bar { --bar-rows: 2; gap: 4px 12px; margin-top: 6px; }
+  .player-bar .strip { height: 26px; }
+  .tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .tools .tool { padding-top: 6px; padding-bottom: 6px; }
+}
+
+
+/* the chooser in a short desktop window: the photographs give up height, so that all four cards stand whole
+   in the window with their "Play him" buttons (1280 x 720, and the 650 px a 1366 x 768 laptop leaves) */
+@media (min-width: 1100px) and (max-height: 800px) {
+  .veil { padding-top: 14px; padding-bottom: 14px; }
+  .chooser-colour { margin-top: 14px; }
+  .levels { margin-top: 16px; }
+  .level-art { aspect-ratio: auto; height: clamp(100px, 100vh - 556px, 228px); }
+  .chooser-foot { margin-top: 14px; }
+}
+/* shorter still: the two lines under the heading go, and the photographs get their height back (the whole face) */
+@media (min-width: 1100px) and (max-height: 700px) {
+  .chooser-sub { display: none; }
+  .level-art { height: clamp(100px, 100vh - 486px, 228px); }
+}
+
+/* Four cards in a row: whatever height the photograph is given, the whole head is in it. The picture is 800 x 800;
+   his hair begins at about row 115 and his chin ends at about row 580. It fills the width of the card (as "cover"
+   would) unless that would show fewer than 500 of its rows: then it is drawn smaller - 500 rows to the height of
+   its place - and stands between two narrow margins of its own dark ground. Which rows show: 39 to 679 where the
+   place is 5:4 (the whole bust, as it always was), 98 to 598 where it is flattest. The year is set in proportion
+   to the place, so that it stays on his shoulder and never climbs onto his jaw.
+   (Sizes of the place itself are needed for this: container units. A browser without them keeps "cover".) */
+@supports (width: 1cqw) {
+  @media (min-width: 1100px) {
+    .level-art { container-type: size; background: #1a1816; }
+    .level-art img {
+      --pic: min(100cqw, 160cqh);
+      position: absolute;
+      left: calc(50cqw - var(--pic) / 2);
+      top: calc(41.8cqh - 0.3831 * var(--pic));
+      width: var(--pic);
+      height: var(--pic);
+    }
+    .level-year { font-size: clamp(1.75rem, min(21.9cqh - 9.6px, 18.3cqw - 11.8px), 2.5rem); }
+  }
+  /* where there may be margins the picture's edges dissolve into them: no seam */
+  @media (min-width: 1100px) and (max-height: 800px) {
+    .level-art img {
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+      mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+    }
+  }
+}
+
+@media (max-width: 1099px) {
+  .levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chooser { width: min(900px, 100%); }
+  .level { flex-direction: row; }
+  .level-art { width: 36%; aspect-ratio: auto; border-bottom: none; border-right: 1px solid var(--gold); }
+  .level-art img { object-position: 50% 30%; }
+  .level-year { font-size: 2rem; }
+  .level-sub { min-height: 0; }
+}
+
+/* one column: he is above the board, the caption, the record and the drawer below it */
+@media (max-width: 999px) {
+  :root { --pad: 16px; --mast: 60px; --bar-h: 96px; --frame-max: 680px; --stage-top: 10px; }
+  .masthead .eyebrow { display: none; }
+  .masthead-sub { display: none; }
+  .stage {
+    --wmax: calc(100vw - 2 * var(--pad));
+    grid-template-columns: var(--frame);
+    grid-template-rows: none;
+    grid-template-areas: none;
+    gap: 14px;
+  }
+  .board-col, .cite, .record, .engine { grid-area: auto; }
+  .cite { margin-top: 4px; min-height: 0; }
+  .record { margin-top: 0; }
+  .scoresheet { flex: none; height: 222px; contain: none; }
+
+  /* your strip and the arrows that step through the game on one line, the controls on the next */
+  .player-bar { --bar-rows: 2; align-content: flex-start; gap: 6px 8px; }
+  .player-bar .strip { height: 44px; }
+  .tools { flex: 1 1 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tool { padding-left: 6px; padding-right: 6px; }
+}
+
+/* fingers: nothing you press is smaller than 44 px */
+@media (max-width: 999px), (pointer: coarse) {
+  .tool, .btn-primary, .seg-btn { min-height: 44px; }
+  .step { width: 44px; height: 44px; }
+  .scoresheet { background: repeating-linear-gradient(180deg, transparent 0 35px, var(--line-soft) 35px 36px); background-attachment: local; }
+  .scoresheet li { height: 36px; }
+  .engine-toggle { min-height: 44px; }
+}
+
+@media (max-width: 620px) {
+  .levels { grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 14px; }
+  .level-art { width: 31%; min-width: 104px; }
+  .level-art img { object-position: 46% 26%; }
+  .level-year { left: 8px; font-size: 1.5rem; }
+  .level-body { padding: 10px 12px 11px; }
+  .level-title { font-size: 1.12rem; }
+  /* a phone has no room for the paragraph, and a sentence is never shown cut: the short line stands for it, whole */
+  .level-sub { margin-top: 5px; letter-spacing: 0.1em; text-wrap: balance; }
+  .level-blurb { display: none; }
+  .level-facts { padding-top: 8px; }
+  .level-book { display: none; }
+  .level[data-last="true"] .level-rating::after { content: ' \00b7  played last'; color: var(--gold); }
+  .level-cta { margin-top: 8px; padding: 7px 10px; }
+  .veil { padding: 14px 12px; }
+  .chooser-head .eyebrow { margin-bottom: 4px; font-size: 0.6rem; }
+  .chooser-sub { display: none; }
+  .chooser-colour { margin-top: 12px; gap: 10px; }
+  .seg-btn { padding-left: 12px; padding-right: 12px; }
+  .chooser-foot { margin-top: 14px; }
+
+  /* the game-over card stands up: the whole face above, the words below */
+  .endcard { grid-template-columns: minmax(0, 1fr); }
+  .end-art { height: 228px; border-right: none; border-bottom: 1px solid var(--gold); }
+  .end-art img { object-position: 50% 18%; }
+  .end-body { padding: 16px 16px 16px; }
+  .end-title { font-size: 1.6rem; }
+  .end-actions { margin-top: 16px; }
+  .end-actions .tool { flex: 1 1 calc(50% - 4px); padding-left: 4px; padding-right: 4px; letter-spacing: 0.1em; }
+  .end-actions #end-close { flex-basis: 100%; }
+}
+
+/* a phone held upright */
+@media (max-width: 520px) {
+  :root {
+    --pad: 8px; --mast: 44px; --frame-pad: 5px; --state-h: 26px; --stage-top: 6px; --stage-bottom: 10px;
+    /* he gets what the board leaves, within limits: the bubble needs its room even on a short phone */
+    --opp-h: clamp(150px, 100vh - 100vw - 176px, 170px);
+    --portrait: 128px;
+  }
+  @supports (height: 100dvh) {
+    :root { --opp-h: clamp(150px, 100dvh - 100vw - 176px, 170px); }
+  }
+  /* what must fit in the window with the board: him, the rule, and your strip with the arrows.
+     On a short phone the row of controls may be a short scroll away; the board is never made small for it. */
+  .stage { --chrome: calc(var(--mast) + var(--stage-top) + var(--opp-h) + var(--state-h) + 56px); }
+  .masthead { padding: 0 14px; }
+  .masthead-title { font-size: 1.5rem; }
+  .stage { gap: 10px; }
+  .opp { column-gap: 10px; padding-left: 0; }
+  .opp-side { padding: 6px 0 5px; }
+  .opp-id { gap: 0 8px; margin-top: 5px; }
+  .opp-name { font-size: 0.9rem; }
+  .opp-title { font-size: 0.88rem; }
+  .opp-meta { font-size: 0.66rem; letter-spacing: 0.06em; }
+  .opp-year { font-size: 0.86rem; }
+  .opp-status { font-size: 0.66rem; letter-spacing: 0.1em; }
+  .bubble-box { padding: 8px 12px 9px; }
+  .bubble-text { font-size: 0.96rem; }
+  .bubble[data-kind="quote"] .bubble-text { font-size: 0.96rem; }
+  .bubble[data-kind="quote"][data-long="true"] .bubble-text { font-size: 0.88rem; line-height: 1.3; }
+  .bubble[data-kind="quote"] .bubble-source { margin-top: 5px; padding-top: 4px; font-size: 0.7rem; }
+  .cite { padding-left: 10px; }
+  .cite-game { margin-top: 3px; font-size: 0.92rem; }
+  .cite-note { margin-top: 3px; }
+  .strip { font-size: 0.66rem; letter-spacing: 0.1em; gap: 7px; }
+  .strip-caps { --cap: 18px; --cap-step: 5px; --cap-piece: 7px; --cap-kind: 12px; }
+  .player-bar { margin-top: 6px; column-gap: 6px; }
+  .player-bar .strip { padding: 0 2px; }
+  .player-bar > .review-live { flex: 1 1 100%; }
+  .tool { font-size: 0.66rem; letter-spacing: 0.08em; }
+  .review-steps { gap: 3px; }
+  .colophon { padding: 12px 14px 22px; }
+}
+
+/* a short phone (both of the browser's bars showing): the masthead and he give up room, so that the controls
+   stay in the window with the board */
+@media (max-width: 520px) and (max-height: 720px) {
+  :root {
+    --mast: 34px; --stage-top: 4px; --stage-bottom: 2px; --state-h: 24px;
+    --opp-h: clamp(124px, 100vh - 100vw - 144px, 170px);
+    --portrait: min(128px, calc(var(--opp-h) - 12px));
+  }
+  @supports (height: 100dvh) {
+    :root { --opp-h: clamp(124px, 100dvh - 100vw - 144px, 170px); }
+  }
+  .masthead-title { font-size: 1.3rem; }
+  .opp-side { padding: 4px 0 3px; }
+  .opp-id { margin-top: 3px; }
+  .opp-name, .opp-title { line-height: 1.15; }
+  .opp-meta { line-height: 1.3; }
+  /* the stamp sits lower on the bubble here: there are only 8 px between the bubble's place and the masthead rule */
+  .bubble[data-kind="quote"] .bubble-tag { top: -5px; }
+  .bubble[data-kind="quote"]:is([data-tight="3"], [data-tight="4"]) .bubble-box { padding-top: 12px; }
+  .player-bar { gap: 4px 6px; margin-top: 4px; }
+  /* looking back through the game: "Back to the game" stands beside the arrows, on two lines (its words are joined
+     in pairs in index.html), so the controls under it stay where they were - in the window. Only if the strip cannot
+     make room for it (fitBar in app.js: data-live="row") does it take a row of its own, as on a taller phone. */
+  .player-bar { --live-beside: 1; }
+  .player-bar > .review-live { flex: none; width: min-content; padding: 3px 7px; white-space: normal; line-height: 1.3; text-align: center; }
+  .player-bar[data-live="row"] > .review-live { flex: 1 1 100%; width: auto; white-space: nowrap; }
+}
+
+/* the narrowest phones: he is smaller, so that the bubble keeps a workable width */
+@media (max-width: 340px) {
+  :root { --portrait: min(100px, calc(var(--opp-h) - 12px)); }
+}
+
+/* a phone on its side: the board on the left as tall as the window, everything else beside it */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+  :root { --mast: 34px; --opp-h: 164px; --portrait: 116px; --pad: 12px; --frame-pad: 5px; --state-h: 26px; }
+  .masthead-title { font-size: 1.15rem; }
+  .stage {
+    --frame: clamp(200px, min(100vh - var(--mast) - 20px, 48vw), 520px);
+    grid-template-columns: var(--frame) minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: 8px 14px;
+    padding: 8px var(--pad) 10px;
+    align-items: start;
+  }
+  @supports (height: 100dvh) {
+    .stage { --frame: clamp(200px, min(100dvh - var(--mast) - 20px, 48vw), 520px); }
+  }
+  .board-col { display: contents; }
+  .board-frame { grid-column: 1; grid-row: 1 / span 6; position: sticky; top: 8px; width: var(--frame); border-radius: 4px; }
+  .opp { grid-column: 2; grid-row: 1; }
+  .opp-state { grid-column: 2; grid-row: 2; margin-top: -8px; }
+  .player-bar { grid-column: 2; grid-row: 3; margin-top: 0; }
+  .cite { grid-column: 2; grid-row: 4; }
+  .record { grid-column: 2; grid-row: 5; }
+  .engine { grid-column: 2; grid-row: 6; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .opp[data-thinking="true"] .opp-portrait img { animation: none; }
 }

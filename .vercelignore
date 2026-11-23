@@ -10,3 +10,4 @@ train_style.py
 *.md
 LICENSE
 data/engine_candidates.json.gz
+tools/

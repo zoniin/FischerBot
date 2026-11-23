@@ -4,10 +4,11 @@ import time
 
 import chess
 import pytest
+from pathlib import Path
 
-from fischerbot.book import OpeningBook
+from fischerbot.book import BOOK_PATH, OpeningBook, recency
 from fischerbot.bot import FischerBot
-from fischerbot.dataset import load_corpus
+from fischerbot.dataset import CORE_SOURCES, load_corpus
 from fischerbot.style import (
     ENGINE_BEST, ENGINE_LOSS, GLOBAL_FEATURES, N_FEATURES, N_PHASE, PHASE_FEATURES,
     PositionContext, StyleModel, feature_names, game_phase, move_features,
@@ -38,8 +39,15 @@ class TestCorpus:
     def test_counts(self, corpus):
         m60 = [g for g in corpus if g.source == "m60mg"]
         wc = [g for g in corpus if g.source == "wc1972"]
+        career = [g for g in corpus if g.source == "career"]
         assert len(m60) == 60
         assert len(wc) == 20  # 21 rounds minus the game-2 forfeit
+        assert len(career) == 651
+        assert len(corpus) == 731
+        assert len(load_corpus(CORE_SOURCES)) == 80
+        assert len({g.key for g in corpus}) == 731, "every game has its own key"
+        with pytest.raises(ValueError):
+            load_corpus(["blitz"])
 
     def test_every_move_of_every_game_is_legal(self, corpus):
         for fg in corpus:
@@ -57,6 +65,47 @@ class TestCorpus:
         assert record(g for g in corpus if g.source == "m60mg") == (48, 9, 3)
         # Reykjavik 1972, games actually played: +7 =11 -2 (12.5-8.5 with the forfeit).
         assert record(g for g in corpus if g.source == "wc1972") == (7, 11, 2)
+        # The rest of his serious games, 1955-1992.
+        assert record(g for g in corpus if g.source == "career") == (352, 221, 78)
+
+    def test_career_games_do_not_repeat_the_core_games(self, corpus):
+        """career.pgn holds only games that are not already in the two core files."""
+        def positions(fg):
+            board = fg.game.board()
+            seen = set()
+            for move in fg.game.mainline_moves():
+                board.push(move)
+                seen.add(board.epd())
+            return seen
+        core = [(g.year, g.fischer_color, positions(g)) for g in corpus if g.source != "career"]
+        years = {year for year, _, _ in core}
+        repeats = []
+        for fg in corpus:
+            if fg.source != "career" or fg.year not in years:
+                continue
+            mine = positions(fg)
+            for year, color, theirs in core:
+                # Two scores of one game share nearly every position; two games
+                # that follow the same opening share a third at most.
+                if year == fg.year and color == fg.fischer_color \
+                        and len(mine & theirs) / min(len(mine), len(theirs)) >= 0.8:
+                    repeats.append(fg.citation)
+        assert not repeats
+
+    def test_career_games_span_his_whole_career(self, corpus):
+        career = [g for g in corpus if g.source == "career"]
+        assert min(g.year for g in career) == 1955 and max(g.year for g in career) == 1992
+        assert not [g.event for g in career if "blitz" in g.event.lower() or " sim" in g.event.lower()]
+        taimanov = [g for g in career if g.opponent == "Taimanov" and g.year == 1971]
+        assert len(taimanov) == 6 and all(g.fischer_score == 1.0 for g in taimanov)   # the 6-0 match
+        assert taimanov[0].citation.endswith("Candidates quarter-final 1971")
+        # The Game of the Century: D. Byrne-Fischer, New York 1956, 17...Be6!!
+        century = next(g for g in career if g.opponent == "D. Byrne" and g.year == 1956 and g.fischer_score == 1.0)
+        board = century.game.board()
+        moves = list(century.game.mainline_moves())
+        for move in moves[:33]:
+            board.push(move)
+        assert board.san(moves[33]) == "Be6"
 
     def test_the_three_losses_in_the_book(self, corpus):
         lost = sorted(g.number for g in corpus if g.source == "m60mg" and g.fischer_score == 0.0)
@@ -115,14 +164,38 @@ class TestCorpus:
         for fg in corpus:
             assert "http" not in fg.citation
 
+    def test_one_name_per_event(self, corpus):
+        """The book's chapter headings and the database agree on what an event is called."""
+        assert game(corpus, "m60mg", 39).citation == \
+            "Botvinnik–Fischer, Varna Olympiad 1962 (My 60 Memorable Games, #39)"
+        assert game(corpus, "m60mg", 2).event_name == "Portorož Interzonal"
+        names = {fg.event_name for fg in corpus}
+        for stray in ("USA Championship", "Candidates' Tournament", "Leipzig Olympic", "Portoroz"):
+            assert stray not in names
+
+    def test_the_game_of_the_century_is_marked(self, corpus):
+        marked = [fg for fg in corpus if fg.is_game_of_the_century]
+        assert len(marked) == 1
+        assert marked[0].citation == \
+            "D. Byrne–Fischer, Rosenwald Trophy, New York 1956 (the “Game of the Century”)"
+        board = marked[0].game.board()
+        moves = list(marked[0].game.mainline_moves())
+        for move in moves[:33]:
+            board.push(move)
+        assert board.san(moves[33]) == "Be6"   # 17...Be6, leaving the queen to be taken
+
 
 class TestBook:
     def test_start_position_in_book(self, book):
         board = chess.Board()
         moves = book.lookup(board)
         assert moves, "start position must be in the book"
-        assert {m.uci for m in moves} == {"e2e4", "c2c4"}  # his only first moves in the corpus
-        assert moves[0].uci == "e2e4"  # "best by test"
+        # Every first move of his serious career: 1.e4 nearly always, 1.Nf3 as a
+        # boy, 1.c4 in 1970-72, and four games with 1.b3.
+        assert [m.uci for m in moves] == ["e2e4", "g1f3", "c2c4", "b2b3"]
+        assert moves[0].count > 300  # "best by test"
+        core = OpeningBook(load_corpus(CORE_SOURCES))
+        assert {m.uci for m in core.lookup(board)} == {"e2e4", "c2c4"}
 
     def test_ruy_lopez_line(self, book):
         board = chess.Board()
@@ -155,12 +228,70 @@ class TestBook:
         for uci in ["e2e4", "e7e5"]:
             board.push_uci(uci)
         assert book.lookup(board), "as White he faced 1...e5 many times"
-        g1 = game(corpus, "wc1972", 1)  # Fischer was Black: White-to-move positions are absent
+        g1 = game(corpus, "wc1972", 1)  # Fischer was Black: White-to-move positions are not his
         board = g1.game.board()
         moves = list(g1.game.mainline_moves())
         for move in moves[:10]:
             board.push(move)
         assert board.turn == chess.WHITE and not book.lookup(board)
+        # ... but the book does remember what his opponent played there.
+        replies = book.replies(board)
+        assert [m.uci for m in replies] == [moves[10].uci()]
+        assert replies[0].games[0].opponent == "Spassky"
+
+    def test_eras(self, book):
+        """A level set in 1956 knows only the games he had played by then."""
+        board = chess.Board()
+        boy = book.lookup(board, year=1956)
+        assert [m.uci for m in boy] == ["e2e4", "g1f3"]          # no 1.c4 or 1.b3 yet
+        assert all(g.year <= 1956 for m in boy for g in m.games)
+        assert boy[1].count >= 8, "the King's Indian Attack was half his repertoire as a boy"
+        everything = book.lookup(board, year=1972, later=True)
+        assert {m.uci for m in everything} == {"e2e4", "g1f3", "c2c4", "b2b3"}
+        assert max(g.year for m in everything for g in m.games) == 1992
+        # In 1972 the old 1.Nf3 games count for little.
+        nf3 = next(m for m in everything if m.uci == "g1f3")
+        assert nf3.weight < 0.5 * next(m for m in book.lookup(board) if m.uci == "g1f3").weight
+
+    def test_recency(self):
+        assert recency(None, 1956) == 1.0
+        assert recency(1972, 1972) == recency(1972, 1968) == recency(1972, 1992) == 1.0
+        assert recency(1972, 1967) == pytest.approx(0.92)
+        assert recency(1972, 1956) == 0.35
+
+    def test_choose_is_reproducible(self, book):
+        board = chess.Board()
+        moves = book.lookup(board)
+        assert book.choose(board, r=0.0).uci == moves[0].uci
+        assert book.choose(board, r=0.999999).uci == moves[-1].uci
+        assert book.choose(chess.Board("8/8/8/4k3/8/8/8/KR6 w - - 0 1")) is None
+
+    def test_famous_games_are_cited_first(self, book):
+        board = chess.Board()
+        for uci in ["c2c4", "e7e6", "g1f3", "d7d5", "d2d4", "g8f6", "b1c3", "f8e7"]:
+            board.push_uci(uci)
+        best = book.lookup(board)[0]
+        assert best.uci == "c1g5"
+        assert best.citations[0] == "Fischer–Spassky, World Championship 1972, Game 6"
+
+    def test_saved_book_matches_the_games(self, corpus):
+        """web/static/data/book.json must be rebuilt whenever the games or the book change."""
+        tools = pytest.importorskip("tools.build_web_data")
+        assert BOOK_PATH.read_text(encoding="utf-8") == tools.book_document(), \
+            "book.json is stale: run python tools/build_web_data.py"
+
+    def test_book_round_trips_through_json(self, book):
+        loaded = OpeningBook.load()
+        assert loaded.size == book.size and len(loaded.games) == len(book.games)
+        board = chess.Board()
+        for uci in ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6", "b1c3", "a7a6"]:
+            for kwargs in ({}, {"year": 1958}, {"year": 1972, "later": True}):
+                a, b = book.lookup(board, **kwargs), loaded.lookup(board, **kwargs)
+                assert [(m.uci, m.count, m.weight, m.citations) for m in a] == \
+                       [(m.uci, m.count, m.weight, m.citations) for m in b]
+                a, b = book.replies(board, **kwargs), loaded.replies(board, **kwargs)
+                assert [(m.uci, m.count) for m in a] == [(m.uci, m.count) for m in b]
+            board.push_uci(uci)
 
     def test_results_shape_the_weights(self, book):
         board = chess.Board()
@@ -332,17 +463,20 @@ class TestStyleModel:
 
 
 class TestTraining:
-    def test_analysis_cache_covers_every_decision(self, corpus):
+    def test_analysis_cache_covers_every_decision(self):
         train_style = pytest.importorskip("train_style")
         if not train_style.CANDIDATES_PATH.exists():
             pytest.skip("engine analysis cache not built")
-        positions = train_style.load_candidates()["positions"]
+        corpus = load_corpus()
+        cache = train_style.load_candidates()
+        assert cache["meta"]["engine"], "the cache names the engine that made it"
+        positions = cache["positions"]
         wanted = train_style.decisions(corpus)
-        assert len(wanted) > 3200
-        missing = [key for key, _, _ in wanted if key not in positions]
+        assert len(wanted) > 30000
+        missing = [key for key, *_ in wanted if key not in positions]
         assert not missing, f"{len(missing)} decisions have no engine analysis, e.g. {missing[:3]}"
-        key, stack, _ = wanted[100]
-        board = chess.Board()
+        key, start, stack, _ = wanted[100]
+        board = chess.Board(start)
         for uci in stack:
             board.push_uci(uci)
         entry = positions[key]
@@ -390,7 +524,7 @@ class TestBot:
         bot = FischerBot(time_budget_ms=300, seed=1)
         choice = bot.choose(chess.Board())
         assert choice.source == "book"
-        assert choice.san in ("e4", "c4")
+        assert choice.san in ("e4", "Nf3", "c4", "b3")
         assert "Fischer" in choice.book_citation
 
     def test_out_of_book_it_searches(self):
@@ -472,6 +606,50 @@ def client():
     return app.test_client()
 
 
+class TestCommentary:
+    """What the portrait says (web/static/data/commentary.json)."""
+
+    @pytest.fixture
+    def lines(self):
+        import json
+        path = Path(__file__).resolve().parent.parent / "web" / "static" / "data" / "commentary.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        return [(category, line) for category, group in document["categories"].items() for line in group]
+
+    def test_every_real_quotation_is_on_the_checked_list(self, lines):
+        """Nothing is shown as Fischer's own words unless it was verified against its source."""
+        import json
+        record = Path(__file__).resolve().parent.parent / "data" / "fischer_quotes.json"
+        checked = {q["text"]: q for q in json.loads(record.read_text(encoding="utf-8"))}
+        quoted = [(category, line) for category, line in lines if "quote" in line]
+        assert len(quoted) >= 15
+        for category, line in quoted:
+            assert line["text"] in checked, f"{category}: not a verified quotation: {line['text']!r}"
+            assert line["quote"]["source"] == checked[line["text"]]["source"]
+            assert line["quote"]["year"] == checked[line["text"]]["year"]
+        for q in checked.values():
+            assert q["evidence"] and q["source"] and 1955 <= q["year"] <= 1972
+
+    def test_lines_are_short_and_fill_only_known_variables(self, lines):
+        import re
+        allowed = {"opponent", "year", "event", "game", "san", "n"}
+        for category, line in lines:
+            assert line["text"].strip() and len(line["text"]) <= 170, (category, line["text"])
+            assert set(re.findall(r"\{(\w+)\}", line["text"])) <= allowed, (category, line["text"])
+            assert line.get("mood", "neutral") in {"neutral", "pleased", "annoyed", "thinking", "surprised"}
+            assert line.get("as") in (None, "white", "black"), (category, line["text"])
+            if "quote" in line:
+                assert "{" not in line["text"], "a real quotation is never a template"
+
+    def test_no_line_is_ahead_of_its_time(self, lines):
+        """A line that mentions Reykjavik must not be said by the boy of 1956."""
+        for category, line in lines:
+            if "quote" in line or category.startswith("level_"):
+                continue
+            if any(word in line["text"] for word in ("Reykjavik", "title match", "my book")):
+                assert line.get("since", 0) >= 1969, (category, line["text"])
+
+
 class TestApi:
     def test_health(self, client):
         r = client.get("/api/health")
@@ -487,13 +665,49 @@ class TestApi:
         assert "<title>FischerBot" in html
         assert "â€" not in html, "mis-encoded punctuation in the page"
 
+    def test_the_page_asks_nothing_of_any_other_host(self, client):
+        """No fonts, scripts, styles or images from elsewhere: a third party that is slow or down
+        cannot leave the page blank, and nobody else learns who visits."""
+        import re
+        from fischerbot.api import WEB_DIR
+        html = client.get("/").get_data(as_text=True)
+        assert not re.search(r"(?:https?:)?//[a-z0-9.-]+\.[a-z]{2,}", html, re.I), "an outside address in the page"
+        for sheet in sorted((WEB_DIR / "static" / "css").glob("*.css")):
+            for target in re.findall(r"url\(\s*['\"]?([^'\")]+)", sheet.read_text(encoding="utf-8")):
+                assert not re.match(r"(?:[a-z]+:)?//|data:", target, re.I), f"{sheet.name}: {target}"
+                assert (sheet.parent / target).resolve().is_file(), f"{sheet.name}: {target} is not in the site"
+        for script in sorted((WEB_DIR / "static" / "js").glob("*.js")):
+            assert not re.search(r"['\"`]https?://", script.read_text(encoding="utf-8")), script.name
+        policy = client.get("/").headers["Content-Security-Policy"]
+        assert "http" not in policy and "unsafe" not in policy and "data:" not in policy
+        for directive in ("default-src 'self'", "script-src 'self'", "style-src 'self'", "font-src 'self'",
+                          "img-src 'self'", "frame-ancestors 'none'", "form-action 'none'"):
+            assert directive in policy, directive
+
+    def test_the_typeface_is_served_by_the_site(self, client):
+        from fischerbot.api import WEB_DIR
+        html = client.get("/").get_data(as_text=True)
+        fonts = sorted((WEB_DIR / "static" / "fonts").glob("*.woff2"))
+        assert len(fonts) == 6
+        assert (WEB_DIR / "static" / "fonts" / "OFL.txt").is_file(), "the typeface travels with its licence"
+        css = (WEB_DIR / "static" / "css" / "style.css").read_text(encoding="utf-8")
+        for font in fonts:
+            assert f"../fonts/{font.name}" in css, f"{font.name} is not used"
+            r = client.get(f"/static/fonts/{font.name}")
+            assert r.status_code == 200 and r.headers["Content-Type"] == "font/woff2"
+            assert r.cache_control.max_age == 24 * 60 * 60
+            assert r.get_data()[:4] == b"wOF2"
+            r.close()
+        for preloaded in ("latin-900-normal", "latin-700-normal", "latin-500-italic"):
+            assert f'href="/static/fonts/playfair-display-{preloaded}.woff2" as="font" type="font/woff2" crossorigin' in html
+
     def test_first_move_is_book_with_citation(self, client):
         r = client.post("/api/move", json={"history": [], "difficulty": "easy"})
         assert r.status_code == 200
         data = r.get_json()
         assert data["source"] == "book"
         assert "book_citation" in data
-        assert data["bot_move"] in ("e2e4", "c2c4")
+        assert data["bot_move"] in ("e2e4", "g1f3", "c2c4", "b2b3")
 
     def test_search_reply_out_of_book(self, client):
         history = ["a2a3", "e7e5", "h2h3"]  # nothing Fischer ever faced
@@ -522,6 +736,19 @@ class TestApi:
         r = client.post("/api/move", json={"history": [], "difficulty": "impossible"})
         assert r.status_code == 400
 
+    def test_levels_set_the_bot_in_a_year_of_his_career(self, client):
+        """The web page's four Fischers: the book of 1956 holds only games he had played by then."""
+        r = client.post("/api/move", json={"history": [], "level": "prodigy"})
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["source"] == "book" and data["bot_move"] in ("e2e4", "g1f3")
+        assert data["book"]["game"]["year"] <= 1956
+        assert data["book"]["game"]["cite"] == data["book_citation"]
+        assert data["book"]["count"] >= 10
+        r = client.post("/api/move", json={"history": ["e2e4"], "level": "world"})
+        assert r.get_json()["book"]["game"]["opponent"]
+        assert client.post("/api/move", json={"history": [], "level": "impossible"}).status_code == 400
+
     def test_non_string_history_rejected(self, client):
         for bad in ([123], [None], [{}], ["e2e4", 5]):
             r = client.post("/api/move", json={"history": bad, "difficulty": "easy"})
@@ -530,6 +757,225 @@ class TestApi:
     def test_oversized_history_rejected(self, client):
         r = client.post("/api/move", json={"history": ["e2e4"] * 2000, "difficulty": "easy"})
         assert r.status_code == 400
+
+    def test_bodies_that_are_not_a_request_are_refused_politely(self, client):
+        """Anything may be posted to a public address: none of it is the server's fault (a 500)."""
+        for body in ('"x"', "5", "true", "null", "[]", "[" * 5000, '{"history": [], "level": ["world"]}',
+                     '{"history": [], "level": {"a": 1}}', '{"history": [], "difficulty": ["easy"]}',
+                     '{"history": [], "difficulty": 3}', "{not json", ""):
+            r = client.post("/api/move", data=body, content_type="application/json")
+            assert r.status_code == 400, f"{body[:40]!r} gave {r.status_code}"
+            assert "error" in r.get_json()
+
+    def test_a_huge_body_is_refused_unread(self, client):
+        r = client.post("/api/move", data='{"history": [], "pad": "' + "x" * 200_000 + '"}',
+                        content_type="application/json")
+        assert r.status_code == 413
+        assert r.get_json() == {"error": "Request too large"}
+        longest = ["e2e4q"] * 1024      # the longest history accepted, at its widest
+        r = client.post("/api/move", json={"history": longest, "level": "world"})
+        assert r.status_code == 400 and "Illegal move" in r.get_json()["error"], "read, then judged on its moves"
+
+    def test_the_pages_files_are_served_under_the_types_a_browser_requires(self):
+        """ES modules, and "nosniff" on every reply: a script served as text/plain is a blank page.
+        The operating system's opinion of .js (the Windows registry often says text/plain) must not matter."""
+        import mimetypes
+        from fischerbot.api import create_app
+        mimetypes.add_type("text/plain", ".js")       # what a Windows machine may report
+        try:
+            app = create_app()
+            app.testing = True
+            c = app.test_client()
+            expected = {
+                "/static/js/app.js": "text/javascript",
+                "/static/js/worker.js": "text/javascript",
+                "/static/css/style.css": "text/css",
+                "/static/data/style.json": "application/json",
+                "/static/img/fischer.webp": "image/webp",
+                "/static/img/fischer-192.png": "image/png",
+                "/static/img/pieces/wK.svg": "image/svg+xml",
+                "/static/fonts/playfair-display-latin-700-normal.woff2": "font/woff2",
+            }
+            for url, content_type in expected.items():
+                r = c.get(url)
+                assert r.status_code == 200, url
+                assert r.headers["Content-Type"].split(";")[0] == content_type, url
+                assert r.headers["X-Content-Type-Options"] == "nosniff"
+                r.close()
+        finally:
+            mimetypes.add_type("text/javascript", ".js")
+
+    def test_a_busy_server_says_so_instead_of_queueing(self, client, monkeypatch):
+        """Requests for one level take turns at its bot; one that cannot have its turn soon gets a 503."""
+        from fischerbot import api
+        client.post("/api/move", json={"history": [], "level": "prodigy"})     # the bot exists now
+        _bot, lock = api._get_bot("prodigy")
+        monkeypatch.setattr(api, "BUSY_WAIT_S", 0.05)
+        assert lock.acquire(timeout=1)
+        try:
+            r = client.post("/api/move", json={"history": ["a2a3", "e7e5", "h2h3"], "level": "prodigy"})
+            assert r.status_code == 503 and "busy" in r.get_json()["error"].lower()
+            other = client.post("/api/move", json={"history": [], "level": "grandmaster"})
+            assert other.status_code == 200, "another level has its own bot"
+        finally:
+            lock.release()
+        r = client.post("/api/move", json={"history": ["a2a3", "e7e5", "h2h3"], "level": "prodigy"})
+        assert r.status_code == 200, "and it is not left locked"
+
+    def test_no_setting_thinks_for_long(self):
+        """What one anonymous request can cost: the time budget of the slowest setting."""
+        from fischerbot import api
+        for name, setting in {**api.DIFFICULTIES, **api.LEVELS}.items():
+            assert setting["time_budget_ms"] <= 4000, name
+
+    def test_a_served_request_fits_a_ten_second_function(self):
+        """Waiting for its turn and then thinking: at most about 4 + 4 seconds, with room to spare."""
+        from fischerbot import api
+        assert api.BUSY_WAIT_S == 4.0
+        slowest = max(setting["time_budget_ms"] for setting in {**api.DIFFICULTIES, **api.LEVELS}.values())
+        assert api.BUSY_WAIT_S + slowest / 1000 <= 8.0 < 10
+
+    # --- the server ends a game where the page does (outcomeOf in web/static/js/events.js), no earlier ---
+
+    SHUFFLE = ["g1f3", "g8f6", "f3g1", "f6g8"]       # back to the position it started from
+
+    def test_a_draw_that_could_only_be_claimed_does_not_stop_the_bot(self, client):
+        """The report from the review: Black could repeat for the third time, nobody has - the game goes on."""
+        history = ["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"]
+        board = chess.Board()
+        for uci in history:
+            board.push_uci(uci)
+        assert board.can_claim_threefold_repetition() and not board.is_repetition(3)
+        assert board.is_game_over(claim_draw=True) and not board.is_game_over()
+        for level in ("prodigy", "world"):
+            r = client.post("/api/move", json={"history": history, "level": level})
+            assert r.status_code == 200
+            data = r.get_json()
+            assert data["bot_move"] is not None, "he plays on"
+            after = board.copy()
+            after.push_uci(data["bot_move"])            # raises if it were not legal
+            assert data["fen"] == after.fen()
+            # ... and if his move is the one that repeats, the reply says that the game is now over
+            assert data["status"] == ("repetition" if after.is_repetition(3) else "playing")
+            assert (data["bot_move"] == "f6g8") == (data["status"] == "repetition")
+
+    def test_the_third_occurrence_of_a_position_ends_the_game(self, client):
+        twice = self.SHUFFLE * 2            # the starting position for the third time, White to move
+        board = chess.Board()
+        for uci in twice:
+            board.push_uci(uci)
+        assert board.is_repetition(3)
+        r = client.post("/api/move", json={"history": twice, "level": "prodigy"})
+        assert r.status_code == 200
+        assert r.get_json() == {"fen": board.fen(), "status": "repetition", "bot_move": None, "legal_moves": []}
+        # one move earlier it was only the second time: he moves
+        r = client.post("/api/move", json={"history": twice[:-1], "level": "prodigy"})
+        assert r.get_json()["bot_move"] is not None
+
+    def test_status_follows_the_page_on_both_sides_of_each_line(self):
+        """python-chess is the reference; the page's rules are the same ones (web/tests/events.test.js)."""
+        from fischerbot.api import _status
+
+        # threefold repetition: claimable is not yet a draw, the third occurrence is
+        board = chess.Board()
+        for uci in ["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"]:
+            board.push_uci(uci)
+        assert board.can_claim_threefold_repetition()
+        assert _status(board) == "playing"
+        board.push_uci("f6g8")
+        assert board.is_repetition(3) and _status(board) == "repetition"
+
+        # fifty moves: 99 half-moves (a draw could be claimed with the next move) is not yet a draw, 100 is
+        almost = chess.Board("8/8/4k3/8/8/3RK3/8/8 w - - 99 80")
+        assert almost.can_claim_fifty_moves() and not almost.is_fifty_moves()
+        assert _status(almost) == "playing"
+        full = chess.Board("8/8/4k3/8/8/3RK3/8/8 b - - 100 80")
+        assert full.is_fifty_moves() and _status(full) == "fifty_moves"
+        assert _status(chess.Board("8/8/4k3/8/8/3RK3/8/8 b - - 120 90")) == "fifty_moves"
+        # ... but a mate delivered with the hundredth half-move is a mate
+        mate = chess.Board("7k/6Q1/6K1/8/8/8/8/8 b - - 100 90")
+        assert mate.is_checkmate() and _status(mate) == "checkmate_white"
+
+        # checkmate, stalemate, insufficient material - and the positions next to them
+        assert _status(chess.Board("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1")) == "checkmate_white"
+        assert _status(chess.Board("7k/5Q2/6K1/8/8/8/8/8 w - - 0 1")) == "playing", "mate in one is not mate"
+        fools = chess.Board()
+        for uci in ["f2f3", "e7e5", "g2g4", "d8h4"]:
+            fools.push_uci(uci)
+        assert _status(fools) == "checkmate_black"
+        assert _status(chess.Board("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1")) == "stalemate"
+        assert _status(chess.Board("7k/8/5K2/6Q1/8/8/8/8 b - - 0 1")) == "playing", "the king has a square"
+        assert _status(chess.Board("8/8/4k3/8/8/3NK3/8/8 w - - 0 1")) == "insufficient_material"
+        assert _status(chess.Board("8/8/4k3/8/8/3BK3/8/8 b - - 0 1")) == "insufficient_material"
+        assert _status(chess.Board("8/8/4k3/8/8/3PK3/8/8 w - - 0 1")) == "playing", "a pawn is enough to play on"
+        assert _status(chess.Board()) == "playing"
+
+    def test_the_server_plays_on_exactly_as_long_as_the_status_says(self, client, monkeypatch):
+        """For every kind of ending: no move when it is over, a move in the position beside it."""
+        from fischerbot import api
+
+        def at(fen):
+            # the API replays a history from the usual start: put the position under test in its place
+            monkeypatch.setattr(api, "_replay", lambda history: chess.Board(fen))
+            r = client.post("/api/move", json={"history": [], "level": "prodigy"})
+            assert r.status_code == 200, fen
+            return r.get_json()
+
+        over = {
+            "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1": "checkmate_white",
+            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1": "stalemate",
+            "8/8/4k3/8/8/3NK3/8/8 w - - 0 1": "insufficient_material",
+            "8/8/4k3/8/8/3RK3/8/8 b - - 100 80": "fifty_moves",
+        }
+        for fen, status in over.items():
+            assert at(fen) == {"fen": fen, "status": status, "bot_move": None, "legal_moves": []}
+        going = [
+            "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1",          # mate in one, to be played
+            "7k/8/5K2/6Q1/8/8/8/8 b - - 0 1",          # not stalemate
+            "8/8/4k3/8/8/3PK3/8/8 w - - 0 1",          # king and pawn
+            "8/8/4k3/8/8/3RK3/8/8 w - - 99 80",        # the hundredth half-move is still to be played
+            "8/8/4k3/8/8/3RK3/8/8 b - - 99 80",
+        ]
+        for fen in going:
+            data = at(fen)
+            assert data["bot_move"] is not None, fen
+            board = chess.Board(fen)
+            board.push_uci(data["bot_move"])             # raises if it were not legal
+            assert data["fen"] == board.fen()
+            assert data["status"] == api._status(board)
+        assert at("7k/5Q2/6K1/8/8/8/8/8 w - - 0 1")["status"] == "checkmate_white", "and he finds the mate"
+        # with the ninety-ninth half-move behind him, his own quiet move completes the fifty
+        assert at("8/8/4k3/8/8/3RK3/8/8 b - - 99 80")["status"] == "fifty_moves"
+
+    def test_images_may_be_cached_but_code_and_data_are_always_checked(self, client):
+        image = client.get("/static/img/pieces/wK.svg")
+        assert image.status_code == 200
+        assert image.cache_control.max_age == 24 * 60 * 60 and image.cache_control.public
+        assert not image.cache_control.no_cache
+        image.close()
+        for url in ("/static/js/app.js", "/static/css/style.css", "/static/data/style.json"):
+            r = client.get(url)
+            assert r.cache_control.no_cache and not r.cache_control.max_age, url
+            assert r.headers.get("ETag"), url
+            r.close()
+        missing = client.get("/static/img/nothing.png")
+        assert missing.status_code == 404 and not missing.cache_control.max_age
+
+    def test_an_image_that_is_confirmed_unchanged_keeps_its_day(self, client):
+        """A browser replaces the headers it stored with those of a "not modified" reply."""
+        for url in ("/static/img/fischer-wide.webp", "/static/fonts/playfair-display-latin-700-normal.woff2"):
+            first = client.get(url)
+            etag = first.headers["ETag"]
+            first.close()
+            again = client.get(url, headers={"If-None-Match": etag})
+            assert again.status_code == 304, url
+            assert again.cache_control.max_age == 24 * 60 * 60 and again.cache_control.public, url
+            assert not again.cache_control.no_cache, url
+        code = client.get("/static/js/app.js")
+        etag = code.headers["ETag"]
+        code.close()
+        again = client.get("/static/js/app.js", headers={"If-None-Match": etag})
+        assert again.status_code == 304 and again.cache_control.no_cache
 
     def test_security_headers_present(self, client):
         r = client.get("/api/health")
