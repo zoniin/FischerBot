@@ -86,13 +86,13 @@ Fischer's own, and are shown as quotations with their source. This file is
 the record of them: the wording, the source as it is shown, where the passage
 stands (which game's notes, which move), and how it was checked.
 
-* Sixteen come from his notes to the moves in *My 60 Memorable Games* (1969).
+* Fifteen come from his notes to the moves in *My 60 Memorable Games* (1969).
   Each was found word for word in three separately extracted copies of the
   book's text, and in the annotations - not in the introductions to the
   games, which Larry Evans wrote. One of them ("I have never opened with the
   d-pawn - on principle") is given as the current algebraic edition prints
   it; the first edition, in descriptive notation, has "the QP".
-* Two more come from "A Bust to the King's Gambit", his article in the
+* Three more come from "A Bust to the King's Gambit", his article in the
   first issue of the *American Chess Quarterly* (1961), found in several
   independent transcriptions.
 

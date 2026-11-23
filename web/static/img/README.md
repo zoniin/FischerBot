@@ -31,3 +31,5 @@ about 70 pixels wide and in black and white, so it was rebuilt:
 
 `pieces/*.svg` are the "cburnett" set drawn by Colin M.L. Burnett for
 Wikipedia, which he released under the GFDL, the BSD licence and the GPL.
+They are used here under the BSD licence; `pieces/LICENSE.txt` carries his
+copyright notice and its terms, and is served with them.

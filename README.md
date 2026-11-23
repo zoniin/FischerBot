@@ -226,7 +226,13 @@ Blitz, simultaneous and casual games are left out. His record across them:
   Fischer from a TikTok post, enlarged, sharpened and coloured for the page.
   Its author is not known to us; `web/static/img/README.md` says what was
   done to it and how its author can ask for credit or removal.
-* The chess pieces are Colin M.L. Burnett's.
+* The chess pieces are Colin M.L. Burnett's "cburnett" set, drawn for
+  Wikipedia and used under the BSD licence
+  (`web/static/img/pieces/LICENSE.txt`).
+* The game scores are public record; the files they were taken from are
+  PGN Mentor's collection of Fischer's games and of the 1972 match, and the
+  Lichess study "All Variations of My 60 Memorable Games" (moves and results
+  only - none of the book's text). `data/README.md` has the details.
 * The typeface is Playfair Display, by Claus Eggers Sørensen and the Playfair
   Display Project Authors, under the SIL Open Font License; the site serves
   its own copy (`web/static/fonts`), and asks nothing of any other host.
@@ -262,4 +268,8 @@ Blitz, simultaneous and casual games are left out. His record across them:
 
 ## License
 
-MIT.
+The code is under the MIT licence (`LICENSE`). Not everything in the
+repository is ours to license: the portrait (author unknown), the chess
+pieces (Colin M.L. Burnett, BSD), the typeface (SIL Open Font License) and
+the piece-square tables (PeSTO) belong to the people named under
+[Credits](#credits), on their terms.
