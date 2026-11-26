@@ -992,6 +992,13 @@ class TestApi:
         assert missing.status_code == 404 and missing.get_json()["path"] == "/nothing-here"
         assert client.get("/").status_code == 200, "without the parameter nothing changes"
 
+    def test_favicon_is_served(self, client):
+        r = client.get("/favicon.ico")
+        assert r.status_code == 200 and r.headers["Content-Type"] == "image/png"
+        assert r.get_data()[:8] == b"\x89PNG\r\n\x1a\n"
+        assert r.cache_control.max_age == 24 * 60 * 60, "kept for a day, like the other images"
+        r.close()
+
     def test_security_headers_present(self, client):
         r = client.get("/api/health")
         assert "Content-Security-Policy" in r.headers
