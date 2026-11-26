@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode
 
 import chess
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 
 from .bot import FischerBot
 
@@ -50,7 +50,7 @@ BUSY_WAIT_S = 4.0
 # The portrait, the pieces and the typeface may be kept by a browser for a
 # day; scripts, styles and data are checked against the server on every
 # visit, so that a page is never assembled from two versions of the site.
-KEPT_PATHS = ("/static/img/", "/static/fonts/")
+KEPT_PATHS = ("/static/img/", "/static/fonts/", "/favicon.ico")
 KEPT_MAX_AGE_S = 24 * 60 * 60
 
 MAX_HISTORY = 1024  # longest legal chess games are far below this
@@ -173,6 +173,11 @@ def create_app() -> Flask:
     @app.get("/")
     def index():
         return (WEB_DIR / "index.html").read_text(encoding="utf-8")
+
+    @app.get("/favicon.ico")
+    def favicon():
+        # browsers ask for this whatever the page says; the page's own icon answers
+        return send_from_directory(WEB_DIR / "static" / "img", "fischer-192.png", mimetype="image/png")
 
     @app.after_request
     def security_headers(response):
